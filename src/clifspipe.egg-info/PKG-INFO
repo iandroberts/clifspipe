@@ -1,0 +1,15 @@
+Metadata-Version: 2.1
+Name: clifspipe
+Version: 0.0.1
+Summary: Data processing for Coma Legacy IFU Survey
+Author-email: Ian Roberts <ianr@uwaterloo.ca>
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# clifspipe
+
+This is a data analysis and processing package for the Coma Legacy IFU Survey. *Very much still in development...*

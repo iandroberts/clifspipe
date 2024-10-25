@@ -1,0 +1,14 @@
+LICENSE
+README.md
+pyproject.toml
+src/clifspipe/__init__.py
+src/clifspipe/astrometry.py
+src/clifspipe/cube.py
+src/clifspipe/dap.py
+src/clifspipe/galaxy.py
+src/clifspipe/spectral_stacking.py
+src/clifspipe/utils.py
+src/clifspipe.egg-info/PKG-INFO
+src/clifspipe.egg-info/SOURCES.txt
+src/clifspipe.egg-info/dependency_links.txt
+src/clifspipe.egg-info/top_level.txt

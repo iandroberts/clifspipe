@@ -32,10 +32,10 @@ def _ivar_sum(arr, axis):
     var = 1 / arr
     new_var = noise_correction * np.nansum(var, axis = axis)
     return 1 / new_var
-    
+
 def _standard_err_mean(arr, axis):
     return np.nanmean(arr, axis = axis) / np.sqrt(2)
-    
+
 def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, ext_ivar = 2, ext_fluxcal = 5, bkgsub = False,
                     clobber = False, fill_ccd_gaps = False, verbose = False, fullfield = False):
     cal_data = hdul[ext].data * hdul[ext_fluxcal].data[:, None, None]
@@ -73,7 +73,7 @@ def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, e
     if fill_ccd_gaps:
         cal_data = fill_ccd_gaps(wave, cal_data, arm, verbose = verbose)
         cal_ivar = fill_ccd_gaps(wave, cal_ivar, arm, verbose = verbose)
-    
+
     head_new = wcs.to_header()
     head_new["NAXIS"] = (3, "Number of array dimensions")
     head_new["NAXIS1"] = cal_data.shape[2]
@@ -92,10 +92,10 @@ def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, e
         head_new["CRPIX1"] = (hdul[ext].header["CRPIX1"], "Pixel coordinate of reference point")
         head_new["CRPIX2"] = (hdul[ext].header["CRPIX2"], "Pixel coordinate of reference point")
     head_new["CRPIX3"] = (1.0, "Pixel coordinate of reference point")
-    
+
     if bkgsub:
         cal_data = bkg_sub(config, cal_data, WCS(head_new), verbose = verbose)
-    
+
     prim_hdu = fits.PrimaryHDU(header = hdul[0].header)
     #head_new = hdul[ext].header
     head_new["BUNIT"] = ("1E-17 erg/(s cm2 Ang)", "units of image")
@@ -104,12 +104,12 @@ def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, e
     head_new["BUNIT"] = ("1E34 (s2 cm4 Ang2)/erg2", "units of image")
     ivar_hdu = fits.ImageHDU(data = cal_ivar, header = head_new, name = "IVAR")
     hdul_out = fits.HDUList([prim_hdu, data_hdu, ivar_hdu])
-    
+
     name_split = fname.split(".fit")[0]
     hdul_out.writeto(name_split + "_cal.fit", overwrite = clobber)
     hdul_out.close()
     return name_split + "_cal.fit"
-        
+
 def bkg_sub(config, data, wcs, verbose = False):
     if config["pipeline"]["bkgsub_galmask"]:
         reff = config["galaxy"]["reff"] * u.arcsec
@@ -136,7 +136,7 @@ def bkg_sub(config, data, wcs, verbose = False):
             bkg = Background2D(data[ch, :, :], (20, 20), filter_size=(3, 3), mask = mask.astype(bool),
                                 sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
             data[ch, :, :] = data[ch, :, :] - bkg.background
-        
+
     return data
 
 def downsample_wav_axis(wave, data, method, return_wave = False, verbose = False):
@@ -165,12 +165,12 @@ def downsample_wav_axis(wave, data, method, return_wave = False, verbose = False
                 raise ValueError
             new_wave[i] = 0.5 * (wave[k] + wave[k + 1])
             k += 2
-    
+
     if return_wave:
         return new_wave, new_data
     else:
         return new_data
-     
+
 def fill_ccd_gaps(wave, data, arm, verbose = False):
     if arm == "red":
         lgap = [7590, 7695]
@@ -199,9 +199,9 @@ def fill_ccd_gaps(wave, data, arm, verbose = False):
                     std = np.nanstd(np.concatenate((data_low, data_high)))
                     noise = np.random.normal(mean, std, size = Ngap)
                     data[mask_gap, i, j] = mean
-                
+
         return data
-                
+
     elif arm == "blue":
         lgap = [5491, 5581]
         llow = [5386, 5486]
@@ -210,7 +210,7 @@ def fill_ccd_gaps(wave, data, arm, verbose = False):
         Ngap = mask_gap.sum()
         mask_low = (wave > llow[0]) & (wave < llow[1])
         mask_high = (wave > lhigh[0]) & (wave < lhigh[1])
-        
+
         for i in trange(data.shape[1], desc = "Filling ccd gaps..."):
             for j in range(data.shape[2]):
                 data_low = data[mask_low, i, j]
@@ -219,12 +219,12 @@ def fill_ccd_gaps(wave, data, arm, verbose = False):
                 std = np.nanstd(np.concatenate((data_low, data_high)))
                 noise = np.random.normal(mean, std, size = Ngap)
                 data[mask_gap, i, j] = mean
-                
+
         return data
-                
+
     else:
         raise ValueError("Arm must be 'red' or 'blue'")
-        
+
 def downsample_cube_spatial(cube, axes, cube_type, factor = 2, verbose = False):
     cube.allow_huge_operations = True
     for a in axes:
@@ -235,7 +235,7 @@ def downsample_cube_spatial(cube, axes, cube_type, factor = 2, verbose = False):
         else:
             raise ValueError
     return cube
-        
+
 def reproject_spectral_axis(cube, l_low, l_high, dl, fill_value = 0, verbose = False):
     dl_ang = dl.to(u.AA).value
     new_spectral_axis = np.arange(l_low.to(u.AA).value, l_high.to(u.AA).value + dl_ang / 2, dl_ang) * u.AA
@@ -243,9 +243,9 @@ def reproject_spectral_axis(cube, l_low, l_high, dl, fill_value = 0, verbose = F
         cube_newspec = cube.spectral_interpolate(new_spectral_axis, fill_value = fill_value)
     else:
         cube_newspec = cube.spectral_interpolate(new_spectral_axis, fill_value = fill_value, update_function = _do_nothing)
-    
+
     return cube_newspec
-    
+
 def stitch_cubes(cube_blue, cube_red, ivar_blue, ivar_red):
     cube_blue.allow_huge_operations = True
     cube_red.allow_huge_operations = True
@@ -253,9 +253,9 @@ def stitch_cubes(cube_blue, cube_red, ivar_blue, ivar_red):
     ivar_red.allow_huge_operations = True
     cube_full = (cube_blue * ivar_blue + cube_red * ivar_red) / (ivar_blue + ivar_red)
     ivar_full = (ivar_blue * ivar_blue + ivar_red * ivar_red) / (ivar_blue + ivar_red)
-    
+
     return cube_full, ivar_full
-    
+
 def write_fullcube(galaxy, fname_out, fname_blue, fname_red, config, cube_full, ivar_full):
     head = fits.Header()
     head["TELESCOP"] = ("WHT", "4.2m William Herschel Telescope")
@@ -264,7 +264,7 @@ def write_fullcube(galaxy, fname_out, fname_blue, fname_red, config, cube_full, 
     head["INFILE_R"] = fname_red
     head["OBJRA"] = config["galaxy"]["ra"]
     head["OBJDEC"] = config["galaxy"]["dec"]
-    
+
     data = np.nan_to_num(cube_full.unmasked_data[:, :, :].value)
     ivar = np.nan_to_num(ivar_full.unmasked_data[:, :, :].value)
     ivar[ivar < 0] = 0
@@ -282,7 +282,7 @@ def write_fullcube(galaxy, fname_out, fname_blue, fname_red, config, cube_full, 
         img_hdu = fits.ImageHDU(data = data, header = cube_full.header, name = "FLUX")
         ivar_hdu = fits.ImageHDU(data = ivar, header = cube_full.header, name = "IVAR")
         mask_hdu = fits.ImageHDU(data = mask.astype(int), header = cube_full.header, name = "MASK")
-    
+
     hdul = fits.HDUList([prim_hdu, img_hdu, ivar_hdu, mask_hdu])
     hdul.writeto(fname_out, overwrite = True)
 
@@ -303,25 +303,25 @@ def generate_cube(galaxy, fullfield = False):
 
     hdul_blue = fits.open(fname_blue)
     hdul_red = fits.open(fname_red)
-    
+
     cal_fname_red = preprocess_cube(fname_red, galaxy.config, hdul_red, "red", downsample_wav = galaxy.config["pipeline"]["downsample_wav"],
                                     bkgsub = galaxy.config["pipeline"]["bkgsub"], clobber = galaxy.config["pipeline"]["clobber"],
                                     fill_ccd_gaps = galaxy.config["pipeline"]["fill_ccd_gaps"], verbose = galaxy.config["pipeline"]["verbose"],
-                                   fullfield = fullfield)    
+                                    fullfield = fullfield)
     cal_fname_blue = preprocess_cube(fname_blue, galaxy.config, hdul_blue, "blue", downsample_wav = galaxy.config["pipeline"]["downsample_wav"],
                                      bkgsub = galaxy.config["pipeline"]["bkgsub"], clobber = galaxy.config["pipeline"]["clobber"],
                                      fill_ccd_gaps = galaxy.config["pipeline"]["fill_ccd_gaps"], verbose = galaxy.config["pipeline"]["verbose"],
-                                    fullfield = fullfield)
+                                     fullfield = fullfield)
     logger.info("Done preprocessing")
     hdul_blue.close()
     hdul_red.close()
-    
+
     cube_blue = SpectralCube.read(cal_fname_blue, hdu = 1)
     cube_red = SpectralCube.read(cal_fname_red, hdu = 1)
     ivar_blue = SpectralCube.read(cal_fname_blue, hdu = 2)
     ivar_red = SpectralCube.read(cal_fname_red, hdu = 2)
     logger.info("Read flux-calibrated cubes")
-    
+
     if galaxy.config["pipeline"]["downsample_spatial"]:
         cube_blue = downsample_cube_spatial(cube_blue, [1, 2], "flux", factor = galaxy.config["pipeline"]["factor_spatial"],
                                             verbose = galaxy.config["pipeline"]["verbose"])
@@ -332,7 +332,7 @@ def generate_cube(galaxy, fullfield = False):
         ivar_red = downsample_cube_spatial(ivar_red, [1, 2], "ivar", factor = galaxy.config["pipeline"]["factor_spatial"],
                                            verbose = galaxy.config["pipeline"]["verbose"])
         logger.info("Done spatial binning")
-    
+
     cube_blue = reproject_spectral_axis(cube_blue, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
     cube_red = reproject_spectral_axis(cube_red, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
     ivar_blue = reproject_spectral_axis(ivar_blue, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
@@ -340,7 +340,7 @@ def generate_cube(galaxy, fullfield = False):
     logger.info("Reprojected red and blue cubes onto common spectral axis")
     cube_full, ivar_full = stitch_cubes(cube_blue, cube_red, ivar_blue, ivar_red)
     logger.info("Combined red and blue cubes")
-    
+
     outdir = galaxy.config["files"]["outdir"]
     if galaxy.config["pipeline"]["downsample_spatial"]:
         if fullfield:
@@ -353,5 +353,3 @@ def generate_cube(galaxy, fullfield = False):
         outfile = outdir + "calibrated_cube_p5.fits"
         write_fullcube(galaxy, outfile, fname_blue, fname_red, galaxy.config, cube_full, ivar_full)
         logger.info(f"Wrote combined, flux-calibrated cube: {outfile}")
-
-##

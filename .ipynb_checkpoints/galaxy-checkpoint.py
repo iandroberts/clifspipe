@@ -3,14 +3,14 @@ import astropy.units as u
 from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 import numpy as np
+import toml
 
 class galaxy:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, clifs_id):
+        config_path = f"/arc/projects/CLIFS/config_files/clifs_{clifs_id}.toml"
+        self.config = toml.load(config_path)
         self.name = self.config["galaxy"]["name"]
         self.clifs_id = self.config["galaxy"]["clifs_id"]
-        if self.clifs_id == -99:
-            self.ngc_id = self.config["galaxy"]["ngc_id"]
         self.ra = self.config["galaxy"]["ra"]
         self.dec = self.config["galaxy"]["dec"]
         self.c = SkyCoord(ra = self.ra, dec = self.dec, unit = "deg")

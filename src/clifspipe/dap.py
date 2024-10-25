@@ -67,15 +67,6 @@ class WEAVEDataCube(DataCube):
             err = 1 / numpy.sqrt(ivar)
             mask = hdu["MASK"].data.astype(bool) | numpy.logical_not(err > 0.) | numpy.equal(ivar, 0.)
         print('Reading WEAVE datacube data ... DONE')
-        
-        # SUB-CUBE
-        #xmin_py = config["cube"]["xmin"] - 1
-        #xmax_py = config["cube"]["xmax"] - 1
-        #ymin_py = config["cube"]["ymin"] - 1
-        #ymax_py = config["cube"]["ymax"] - 1
-        #flux = flux[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
-        #err = err[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
-        #mask = mask[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
 
         # Resample to a geometric sampling
         # - Get the wavelength vector
@@ -114,13 +105,9 @@ class WEAVEDataCube(DataCube):
         head_new["CDELT3"] = (1., "[m] Coordinate increment at reference point")
         head_new["CRVAL3"] = (r.outx[0] * 1e-10, "[m] Coordinate value at reference point")
         head_new["CTYPE3"] = ("WAVE-LOG", "Vacuum wavelength")
-        #head_new["CRPIX1"] = (hdr["CRPIX1"] - xmin_py, "Pixel coordinate of reference point")
-        #head_new["CRPIX2"] = (hdr["CRPIX2"] - ymin_py, "Pixel coordinate of reference point")
         head_new["CRPIX1"] = (hdr["CRPIX1"], "Pixel coordinate of reference point")
         head_new["CRPIX2"] = (hdr["CRPIX2"], "Pixel coordinate of reference point")
         head_new["CRPIX3"] = (1.0, "Pixel coordinate of reference point")
-        #head_new["OBJRA"] = prihdr["OBJRA"]
-        #head_new["OBJDEC"] = prihdr["OBJDEC"]
         wcs_new = WCS(head_new)
 
         ivar = r.oute.reshape(*spatial_shape,-1)
