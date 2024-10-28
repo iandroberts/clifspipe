@@ -6,13 +6,26 @@ authors = [
 ]
 description = "Data processing for Coma Legacy IFU Survey"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+]
+license = {file = "LICENSE"}
+dependencies = [
+    "astropy",
+    "numpy",
+    "spectral-cube",
+    "toml",
+    "matplotlib",
+    "tqdm",
+    "photutils",
+    "pathlib",
+    "sdss-mangadap",
 ]
 
-#[project.urls]
-#Homepage = "https://github.com/pypa/sampleproject"
-#Issues = "https://github.com/pypa/sampleproject/issues"
+[project.urls]
+Homepage = "https://github.com/iandroberts/clifspipe"
+Issues = "https://github.com/iandroberts/clifspipe/issues"

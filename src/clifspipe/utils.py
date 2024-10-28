@@ -5,6 +5,7 @@ import re
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import logging
+from astropy.nddata import Cutout2D
 
 logger = logging.getLogger("CLIFS_Pipeline")
 
@@ -92,3 +93,83 @@ def make_config_file(args):
     _populate_cube(args, file)
     _populate_files(args, file)
     _populate_pipeline(args, file)
+
+def sky_cutout_from_image(img, coord, size, wcs):
+    cut = Cutout2D(img, coord, size, wcs = wcs)
+    return cut.data, cut.wcs.to_header() 
+
+def eline_lookup(line):
+    # Lookup table to convert line name to correct extension in MaNGA-DAP maps file
+    # see: https://sdss-mangadap.readthedocs.io/en/latest/datamodel.html
+    if line == "OII-3727":
+        return 0
+    elif line == "OII-3729":
+        return 1
+    elif line == "H12-3751":
+        return 2
+    elif line == "H11-3771":
+        return 3
+    elif line == "Hthe-3798":
+        return 4
+    elif line == "Heta-3836":
+        return 5
+    elif line == "NeIII-3869":
+        return 6
+    elif line == "HeI-3889":
+        return 7
+    elif line == "Hzet-3890":
+        return 8
+    elif line == "NeIII-3968":
+        return 9
+    elif line == "Heps-3971":
+        return 10
+    elif line == "Hdel-4102":
+        return 11
+    elif line == "Hgam-4341":
+        return 12
+    elif line == "HeII-4687":
+        return 13
+    elif line == "Hb-4862":
+        return 14
+    elif line == "OIII-4960":
+        return 15
+    elif line == "OIII-5008":
+        return 16
+    elif line == "NI-5199":
+        return 17
+    elif line == "NI-5201":
+        return 18
+    elif line == "HeI-5877":
+        return 19
+    elif line == "OI-6302":
+        return 20
+    elif line == "OI-6365":
+        return 21
+    elif line == "NII-6549":
+        return 22
+    elif line == "Ha-6564":
+        return 23
+    elif line == "NII-6585":
+        return 24
+    elif line == "SII-6718":
+        return 25
+    elif line == "SII-6732":
+        return 26
+    elif line == "HeI-7067":
+        return 27
+    elif line == "ArIII-7137":
+        return 28
+    elif line == "ArIII-7753":
+        return 29
+    elif line == "Peta-9017":
+        return 30
+    elif line == "SIII9071":
+        return 31
+    elif line == "Pzet-9231":
+        return 32
+    elif line == "SIII-9533":
+        return 33
+    elif line == "Peps-9548":
+        return 34
+    else:
+        raise ValueError("Invalid line name, see: https://sdss-mangadap.readthedocs.io/en/latest/datamodel.html")

@@ -4,6 +4,7 @@ from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 import numpy as np
 import toml
+from clifspipe.utils import eline_lookup
 
 class galaxy:
     def __init__(self, clifs_id):
@@ -17,6 +18,19 @@ class galaxy:
         self.reff = self.config["galaxy"]["reff"] * u.arcsec
         self.ell = self.config["galaxy"]["ell"]
         self.pa = self.config["galaxy"]["pa"] * u.deg
+
+    def get_cutout_image(self, telescope, filter, header = False):
+        img_path = "/arc/projects/CLIFS/multiwav/cutouts/clifs{}/{}-{}.fits".format(self.clifs_id, telescope, filter)
+        return fits.getdata(img_path, header = header)
+
+    def get_maps(self):
+        dap_dir = self.config["files"]["outdir_dap"]
+        mapsfile = fits.open(dap_dir + "/weave-calibrated-MAPS-HYB10-MILESHC-MASTARSSP.fits")
+        return mapsfile
+
+    def get_eline_map(self, line, map = "GFLUX"):
+        mapsfile = self.get_maps()
+        return mapsfile["EMLINE_{}".format(map)].data[eline_lookup(line)]
 
 class get_cube:
     def __init__(self, galaxy):
