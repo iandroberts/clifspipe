@@ -99,7 +99,7 @@ def cutout_from_image(galaxy, telescope, filter, Nr90 = 4):
 
 def make_multiwav_cutouts(galaxy, Nr90 = 4):
     all_filters = {
-                   "cfht": ["G", "I2"],
+                   "cfht": ["U", "G", "I2"],
                    "herschel": ["pacs100", "pacs160", "spire250", "spire350", "spire500"],
                   }
     for telescope in list(all_filters.keys()):

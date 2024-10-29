@@ -1,5 +1,5 @@
 [project]
-name = "clifspipe"
+name = "clifspy"
 version = "0.0.1"
 authors = [
   { name="Ian Roberts", email="ianr@uwaterloo.ca" },
@@ -27,5 +27,5 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/iandroberts/clifspipe"
-Issues = "https://github.com/iandroberts/clifspipe/issues"
+Homepage = "https://github.com/iandroberts/clifspy"
+Issues = "https://github.com/iandroberts/clifspy/issues"
