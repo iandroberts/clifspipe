@@ -17,7 +17,7 @@ from photutils.aperture import SkyEllipticalAperture
 from astropy.stats import SigmaClip
 from photutils.background import Background2D, MedianBackground
 import logging
-from clifspipe.astrometry import find_astrometry_solution
+from clifspy.astrometry import find_astrometry_solution
 import subprocess
 
 logger = logging.getLogger("CLIFS_Pipeline")
@@ -344,12 +344,12 @@ def generate_cube(galaxy, fullfield = False):
     outdir = galaxy.config["files"]["outdir"]
     if galaxy.config["pipeline"]["downsample_spatial"]:
         if fullfield:
-            outfile = outdir + "calibrated_cube_full.fits"
+            outfile = outdir + "/calibrated_cube_full.fits"
         else:
-            outfile = outdir + "calibrated_cube.fits"
+            outfile = outdir + "/calibrated_cube.fits"
         write_fullcube(galaxy, outfile, fname_blue, fname_red, galaxy.config, cube_full, ivar_full)
         logger.info(f"Wrote combined, flux-calibrated cube: {outfile}")
     else:
-        outfile = outdir + "calibrated_cube_p5.fits"
+        outfile = outdir + "/calibrated_cube_p5.fits"
         write_fullcube(galaxy, outfile, fname_blue, fname_red, galaxy.config, cube_full, ivar_full)
         logger.info(f"Wrote combined, flux-calibrated cube: {outfile}")

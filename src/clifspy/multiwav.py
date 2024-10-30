@@ -1,10 +1,10 @@
 from astropy.coordinates import SkyCoord
-from clifspipe.galaxy import galaxy
+from clifspy.galaxy import galaxy
 import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 import astropy.units as u
-import clifspipe.utils as utils
+import clifspy.utils as utils
 import os
 import logging
 import re
@@ -59,6 +59,15 @@ def units_to_MJysr(img, img_h, telescope, filter):
             raise ValueError("Invalid SPIRE filter")
         Sv = (img * u.Jy) / Abm
         return Sv.to(u.MJy / u.sr).value
+    elif telescope == "galex":
+        if filter == "nuv":
+            fv = img * 3.37289e-5 * u.Jy
+        elif filter == "fuv":
+            fv = img * 1.07647e-4 * u.Jy
+        else:
+            raise ValueError("Invalid GALEX filter")
+        Sv = fv / (img_h["CDELT2"] * u.deg) ** 2
+        return Sv.to(u.MJy / u.sr).value
     else:
         raise ValueError("Telescope ({}) is  not supported".format(telescope))
 
@@ -84,9 +93,12 @@ def cutout_from_image(galaxy, telescope, filter, Nr90 = 4):
     elif telescope == "herschel":
         wav = int(re.search(r'\d+', filter).group())
         img_path = "/arc/projects/CLIFS/multiwav/{}-{}/HATLAS_NGP_DR2_BACKSUB{}.FITS".format(telescope, filter, wav)
+    elif telescope == "galex":
+        img_path = "/arc/projects/CLIFS/multiwav/{}/mosaic_{}.fits".format(telescope, filter)
     else:
         raise ValueError("Telescope ({}) is  not supported".format(telescope))
-    img, img_h = fits.getdata(img_path, header = True)
+    hdul = fits.open(img_path)
+    img, img_h = hdul[0].data, hdul[0].header
     wcs = WCS(img_h)
     img = units_to_MJysr(img, img_h, telescope, filter)
     img_cut, img_cut_h = utils.sky_cutout_from_image(img, coord, Nr90 * galaxy.config["galaxy"]["r90"] * u.arcsec, wcs)
@@ -96,9 +108,11 @@ def cutout_from_image(galaxy, telescope, filter, Nr90 = 4):
         os.makedirs(outdir)
     hdu = fits.PrimaryHDU(data = img_cut, header = out_hdr)
     hdu.writeto(outdir + "/{}-{}.fits".format(telescope, filter), overwrite = True)
+    hdul.close()
 
 def make_multiwav_cutouts(galaxy, Nr90 = 4):
     all_filters = {
+                   "galex": ["fuv", "nuv"],
                    "cfht": ["U", "G", "I2"],
                    "herschel": ["pacs100", "pacs160", "spire250", "spire350", "spire500"],
                   }

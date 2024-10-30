@@ -36,14 +36,10 @@ class WEAVEDataCube(DataCube):
         _ifile = Path(ifile).resolve()
         # Extract CLIFS/NGC ID from cube file path. This is a bit hacky and relies on
         # the CLIFS/NGC ID being the only int in the path.  Probably a better way...
-        where_ngc = ifile.find("ngc")
         find_ints = re.findall(r'\d+', ifile)
         assert len(find_ints) == 1 # Assert that only one int is found
-        if where_ngc == -1:
-            config_path = "/arc/projects/CLIFS/config_files/clifs_{}.toml".format(find_ints[0])
-        else:
-            config_path = "/arc/projects/CLIFS/config_files/ngc_{}.toml".format(find_ints[0])
-        
+        config_path = "/arc/projects/CLIFS/config_files/clifs_{}.toml".format(find_ints[0])
+
         if not _ifile.exists():
             raise FileNotFoundError(f'File does not exist: {_ifile}')
 
@@ -54,7 +50,7 @@ class WEAVEDataCube(DataCube):
         # Collect the metadata into a dictionary
         config = toml.load(config_path)
         meta = config["galaxy"]
-        sres = 2500             
+        sres = 2500
 
         # Open the file and initialize the DataCube base class
         with fits.open(str(_ifile)) as hdu:
@@ -120,23 +116,23 @@ class WEAVEDataCube(DataCube):
         flux = r.outy.reshape(*spatial_shape,-1)
         flux[mask] = 0.0
         flux[~numpy.isfinite(flux)] = 0.0
-        
+
         # Default name assumes file names like, e.g., '*_icubew.fits'
         super().__init__(flux, ivar=ivar, mask=mask, sres=_sres,
                          wave=r.outx, meta=meta, prihdr=head_new, wcs=wcs_new,
                          name=_ifile.name.split('_')[0])
 
 def _move_manga_dap_output_files(config, dap_dir_name = "HYB10-MILESHC-MASTARSSP", decompress = False):
-    os.rename(config["files"]["outdir_dap"] + "{}/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name, dap_dir_name),
-              config["files"]["outdir_dap"] + "weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name))
-    os.rename(config["files"]["outdir_dap"] + "{}/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name, dap_dir_name),
-              config["files"]["outdir_dap"] + "weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name))
-    shutil.rmtree(config["files"]["outdir_dap"] + dap_dir_name)
+    os.rename(config["files"]["outdir_dap"] + "/{}/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name, dap_dir_name),
+              config["files"]["outdir_dap"] + "/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name))
+    os.rename(config["files"]["outdir_dap"] + "/{}/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name, dap_dir_name),
+              config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name))
+    shutil.rmtree(config["files"]["outdir_dap"] + "/" + dap_dir_name)
 
     if decompress:
-        subprocess.run(["gunzip", config["files"]["outdir_dap"] + "weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name)])
-        subprocess.run(["gunzip", config["files"]["outdir_dap"] + "weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name)])
-    
+        subprocess.run(["gunzip", config["files"]["outdir_dap"] + "/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name)])
+        subprocess.run(["gunzip", config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name)])
+
 def run_manga_dap(galaxy, decompress = False):
     cube_path = galaxy.config["files"]["cube_sci"]
     dap_config_path = "/arc/projects/CLIFS/config_files/weave.toml"
@@ -145,7 +141,7 @@ def run_manga_dap(galaxy, decompress = False):
                     "-f",
                     cube_path,
                     "--cube_module",
-                    "/arc/projects/CLIFS/clifspipe/dap",
+                    "/arc/projects/CLIFS/clifspy/src/clifspy/dap",
                     "WEAVEDataCube",
                     "--plan_module",
                     "mangadap.config.analysisplan.AnalysisPlan",
@@ -155,5 +151,3 @@ def run_manga_dap(galaxy, decompress = False):
                     out_path])
     # Move output files back one step in file tree, probably a way to do this via the DAP call..
     _move_manga_dap_output_files(galaxy.config, decompress = decompress)
-
-    

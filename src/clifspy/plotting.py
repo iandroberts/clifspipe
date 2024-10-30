@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from clifspipe.galaxy import galaxy
+from clifspy.galaxy import galaxy
 from astropy.wcs import WCS
 import matplotlib.gridspec as gs
 from astropy.visualization import (AsymmetricPercentileInterval, PercentileInterval, SqrtStretch,
@@ -9,7 +9,7 @@ plt.rcParams["mathtext.fontset"] = "stix"
 plt.rcParams["font.family"] = "STIXGeneral"
 
 class panel_image:
-    def __init__(self, clifs_id, panels = ["v_star", "vdisp_star", "dn4000", "flux_ha", "v_ha", "vdisp_ha"], figsize = (9.0, 2.9)):
+    def __init__(self, clifs_id, panels = ["snr", "v_star", "vdisp_star", "flux_ha", "v_ha", "dn4000"], figsize = (9.0, 2.9)):
         self.galaxy = galaxy(clifs_id)
         self.fig = plt.Figure(figsize = figsize)
         self.axis_grid = gs.GridSpec(2, 5)
@@ -85,6 +85,24 @@ class panel_image:
             self._offset_axis(ax, labels = True)
             #ax.tick_params(direction = "in", length = 3.0, width = 0.5)
 
+    def snr(self, gax, xlim = None, ylim = None, yticks = False, xticks = False):
+        snr_map = np.copy(self.maps["SPX_SNR"].data)
+        snr_map[snr_map < 1] = np.nan
+        norm = ImageNormalize(snr_map, interval = PercentileInterval(98),
+                              stretch = LinearStretch())
+        ax = self.fig.add_subplot(gax, projection = WCS(self.maps[0].header).celestial)
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        im = ax.imshow(snr_map, cmap = "viridis", norm = norm)
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [0, 20, 40])
+        cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
+        ax.text(0.07, 0.98, r"$(\mathrm{S\,/\,N})_{\,g}$", fontsize = 8, color = "k", ha = "left", va = "top", transform = ax.transAxes)
+        ax.set_aspect("equal")
+        self._offset_axis(ax, labels = False, grid = True)
+        ax.set_facecolor("#dddddd")
+
     def v_star(self, gax, mask = None, xlim = None, ylim = None, vel_min = -100, vel_max = 100, xticks = False, yticks = False):
         vel = self.maps["STELLAR_VEL"].data
         vel[self.maps["BINID"].data[0] == -1] = np.nan
@@ -133,7 +151,7 @@ class panel_image:
 
     def dn4000(self, gax, xlim = None, ylim = None, mask = None, yticks = False, xticks = False):
         d4 = self.maps["SPECINDEX"].data[44]
-        snr_map = self.maps["SPX_SNR"].data
+        snr_map = np.copy(self.maps["SPX_SNR"].data)
         d4[snr_map < 3] = np.nan
         if mask is not None:
             d4[~mask] = np.nan
@@ -232,7 +250,10 @@ class panel_image:
             r = i // 3
             c = (i % 3) + 2
             getattr(self, self.panels[i])(self.axis_grid[r, c], xlim = xlim, ylim = ylim)
-        self.fig.savefig(filepath, bbox_inches = "tight", pad_inches = 0.03)
+        if args.png:
+            self.fig.savefig(filepath + ".png", bbox_inches = "tight", pad_inches = 0.03)
+        else:
+            self.fig.savefig(filepath + ".pdf", bbox_inches = "tight", pad_inches = 0.03)
 
 if __name__ == "__main__":
     import argparse
@@ -240,5 +261,6 @@ if __name__ == "__main__":
     parser.add_argument("clifs_id", type = int)
     parser.add_argument("--rgb", action = "store_true")
     parser.add_argument("--Nr", default = 1.5, type = float)
+    parser.add_argument("--png", action = "store_true")
     args = parser.parse_args()
-    panel_image(args.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}.pdf".format(args.clifs_id), rgb = args.rgb, Nr = args.Nr)
+    panel_image(args.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}".format(args.clifs_id), rgb = args.rgb, Nr = args.Nr)

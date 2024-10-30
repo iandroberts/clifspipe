@@ -4,7 +4,7 @@ from astropy.wcs import WCS
 from astropy.coordinates import SkyCoord
 import numpy as np
 import toml
-from clifspipe.utils import eline_lookup
+from clifspy.utils import eline_lookup
 
 class galaxy:
     def __init__(self, clifs_id):
