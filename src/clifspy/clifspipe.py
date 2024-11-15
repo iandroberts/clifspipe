@@ -4,7 +4,7 @@ from clifspy.galaxy import galaxy
 from clifspy.dap import run_manga_dap
 from clifspy.utils import make_config_file
 from clifspy.multiwav import make_multiwav_cutouts
-from clifspy.plotting import panel_image
+from clifspy.plotting import plots_for_clifspipe
 import warnings
 import os.path
 import logging
@@ -66,7 +66,7 @@ def run_clifs_pipeline(args, logger):
 
     if args.make_plots:
         logger.info("Making plots...")
-        panel_image(args.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}.pdf".format(args.clifs_id), rgb = True)
+        plots_for_clifspipe(this_galaxy)
         logger.info("Done plotting")
 
 def main():
@@ -92,7 +92,6 @@ def main():
     parser.add_argument("--hdf5", default = "true")
     parser.add_argument("--verbose", default = "false")
     parser.add_argument("--clobber", default = "true")
-    #parser.add_argument("--ngc", action = "store_true")
     args = parser.parse_args()
 
     if args.default_run & (args.process_cube | args.multiwav | args.manga_dap | args.make_plots):

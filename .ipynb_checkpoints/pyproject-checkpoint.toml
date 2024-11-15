@@ -1,0 +1,34 @@
+[project]
+name = "clifspy"
+version = "0.0.1"
+authors = [
+  { name="Ian Roberts", email="ianr@uwaterloo.ca" },
+]
+description = "Data processing for Coma Legacy IFU Survey"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+]
+license = {file = "LICENSE"}
+dependencies = [
+    "astropy",
+    "numpy",
+    "spectral-cube",
+    "toml",
+    "matplotlib",
+    "tqdm",
+    "photutils",
+    "pathlib",
+    "sdss-mangadap",
+]
+
+[project.scripts]
+clifspipe = "clifspy.clifspipe:main"
+
+[project.urls]
+Homepage = "https://github.com/iandroberts/clifspy"
+Issues = "https://github.com/iandroberts/clifspy/issues"

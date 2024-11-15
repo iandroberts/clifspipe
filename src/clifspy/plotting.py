@@ -1,10 +1,17 @@
+from photutils.aperture import SkyEllipticalAperture
+from astropy.coordinates import SkyCoord
+from matplotlib.patches import Circle, RegularPolygon
+from matplotlib.collections import PatchCollection
+from reproject import reproject_exact, reproject_interp
+from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
 from clifspy.galaxy import galaxy
 from astropy.wcs import WCS
 import matplotlib.gridspec as gs
 from astropy.visualization import (AsymmetricPercentileInterval, PercentileInterval, SqrtStretch,
-                                   ImageNormalize, LinearStretch, AsinhStretch)
+                                 ImageNormalize, LinearStretch, AsinhStretch)
+import astropy.units as u
 plt.rcParams["mathtext.fontset"] = "stix"
 plt.rcParams["font.family"] = "STIXGeneral"
 
@@ -74,6 +81,8 @@ class panel_image:
                 ax.set_ylim(ylim)
             ax.imshow(np.moveaxis(rgb_array, 0, -1))
             self._offset_axis(ax, labels = True)
+            ax.text(0.03, 0.97, "CLIFS {}  ({})".format(self.galaxy.clifs_id, self.galaxy.name), color = "w", fontsize = 10,
+                    ha = "left", va = "top", transform = ax.transAxes)
         else:
             norm = ImageNormalize(img, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
             ax = self.fig.add_subplot(gax, projection = WCS(img_h).celestial)
@@ -88,17 +97,20 @@ class panel_image:
     def snr(self, gax, xlim = None, ylim = None, yticks = False, xticks = False):
         snr_map = np.copy(self.maps["SPX_SNR"].data)
         snr_map[snr_map < 1] = np.nan
-        norm = ImageNormalize(snr_map, interval = PercentileInterval(98),
-                              stretch = LinearStretch())
         ax = self.fig.add_subplot(gax, projection = WCS(self.maps[0].header).celestial)
         if xlim is not None:
             ax.set_xlim(xlim)
         if ylim is not None:
             ax.set_ylim(ylim)
-        im = ax.imshow(snr_map, cmap = "viridis", norm = norm)
-        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [0, 20, 40])
+        im = ax.imshow(snr_map,
+                       cmap = "viridis",
+                       vmin = self.galaxy.config["plotting"]["panel"]["sn_min"][0],
+                       vmax = self.galaxy.config["plotting"]["panel"]["sn_max"][0])
+        ticks = [self.galaxy.config["plotting"]["panel"]["sn_min"][1], self.galaxy.config["plotting"]["panel"]["sn_max"][1]]
+        ticks.insert(1, int(np.average(ticks)))
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = ticks)
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.98, r"$(\mathrm{S\,/\,N})_{\,g}$", fontsize = 8, color = "k", ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$(\mathrm{S\,/\,N})_{\,g}$", fontsize = 8, color = "k", ha = "left", va = "top", transform = ax.transAxes)
         ax.set_aspect("equal")
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
@@ -117,16 +129,18 @@ class panel_image:
         im = ax.imshow(
                        vel,
                        cmap = "RdBu_r",
-                       vmin = vel_min,
-                       vmax = vel_max,
+                       vmin = self.galaxy.config["plotting"]["panel"]["v_star_min"][0],
+                       vmax = self.galaxy.config["plotting"]["panel"]["v_star_max"][0],
                       )
-        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [-75, 0, 75])
+        ticks = [self.galaxy.config["plotting"]["panel"]["v_star_min"][1], self.galaxy.config["plotting"]["panel"]["v_star_max"][1]]
+        ticks.insert(1, int(np.average(ticks)))
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = ticks)
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.98, r"$V_\bigstar$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$V_\bigstar$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
 
-    def vdisp_star(self, gax, mask = None, xlim = None, ylim = None, vel_min = 0, vel_max = 100, xticks = False, yticks = False):
+    def vdisp_star(self, gax, mask = None, xlim = None, ylim = None, xticks = False, yticks = False):
         vel = self.maps["STELLAR_SIGMA"].data
         vel[self.maps["BINID"].data[0] == -1] = np.nan
         vel[self.maps["BIN_SNR"].data < 8] = np.nan
@@ -140,12 +154,14 @@ class panel_image:
         im = ax.imshow(
                        vel,
                        cmap = "inferno_r",
-                       vmin = vel_min,
-                       vmax = vel_max,
+                       vmin = self.galaxy.config["plotting"]["panel"]["vdisp_star_min"][0],
+                       vmax = self.galaxy.config["plotting"]["panel"]["vdisp_star_max"][0],
                       )
-        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [10, 90])
+        ticks = [self.galaxy.config["plotting"]["panel"]["vdisp_star_min"][1], self.galaxy.config["plotting"]["panel"]["vdisp_star_max"][1]]
+        ticks.insert(1, int(np.average(ticks)))
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = ticks)
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.98, r"$\sigma_\bigstar$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$\sigma_\bigstar$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
 
@@ -160,16 +176,21 @@ class panel_image:
             ax.set_xlim(xlim)
         if ylim is not None:
             ax.set_ylim(ylim)
-        im = ax.imshow(d4, vmin = 1, vmax = 1.5, cmap = "RdBu_r")
-        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [1.1, 1.4])
+        im = ax.imshow(d4,
+                       vmin = self.galaxy.config["plotting"]["panel"]["dn4000_min"][0],
+                       vmax = self.galaxy.config["plotting"]["panel"]["dn4000_max"][0],
+                       cmap = "RdBu_r")
+        ticks = [self.galaxy.config["plotting"]["panel"]["dn4000_min"][1], self.galaxy.config["plotting"]["panel"]["dn4000_max"][1]]
+        ticks.insert(1, float(np.average(ticks)))
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = ticks)
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.98, r"$\mathrm{D_n4000}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$\mathrm{D_n4000}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
 
     def flux_ha(self, gax, xlim = None, ylim = None, return_mask = False, yticks = False, xticks = False):
         flux = self.galaxy.get_eline_map("Ha-6564")
-        flux_sn = flux * self.galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR")
+        flux_sn = flux * np.sqrt(self.galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR"))
         mask = flux_sn < 4
         flux[mask] = np.nan
         ax = self.fig.add_subplot(gax, projection = WCS(self.maps[0].header, naxis = 2))
@@ -177,24 +198,28 @@ class panel_image:
             ax.set_xlim(xlim)
         if ylim is not None:
             ax.set_ylim(ylim)
-        norm = ImageNormalize(flux, interval = AsymmetricPercentileInterval(1.0, 95.0), stretch = LinearStretch())
+        norm = ImageNormalize(flux, vmin = self.galaxy.config["plotting"]["panel"]["flux_ha_min"][0], vmax = self.galaxy.config["plotting"]["panel"]["flux_ha_max"][0], stretch = SqrtStretch())
         im = ax.imshow(
                        flux,
                        cmap = "viridis",
+                       #vmin = self.galaxy.config["plotting"]["panel"]["flux_ha_min"][0],
+                       #vmax = self.galaxy.config["plotting"]["panel"]["flux_ha_max"][0],
                        norm = norm,
                       )
-        cbar = self.fig.colorbar(im, location = "right", pad = 0.04)
+        ticks = [self.galaxy.config["plotting"]["panel"]["flux_ha_min"][1], self.galaxy.config["plotting"]["panel"]["flux_ha_max"][1]]
+        ticks.insert(1, int(np.average(ticks)))
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = ticks)
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.97, r"$F_\mathrm{H\alpha}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$F_\mathrm{H\alpha}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
         if return_mask:
             return mask
 
-    def v_ha(self, gax, mask = None, xlim = None, ylim = None, yticks = False, xticks = False, vel_min = -100, vel_max = 100):
+    def v_ha(self, gax, mask = None, xlim = None, ylim = None, yticks = False, xticks = False):
         vel = self.galaxy.get_eline_map("Ha-6564", map = "GVEL")
         flux = self.galaxy.get_eline_map("Ha-6564")
-        flux_sn = flux * self.galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR")
+        flux_sn = flux * np.sqrt(self.galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR"))
         mask = flux_sn < 4
         vel[mask] = np.nan
         ax = self.fig.add_subplot(gax, projection = WCS(self.maps[0].header, naxis = 2))
@@ -205,12 +230,14 @@ class panel_image:
         im = ax.imshow(
                        vel,
                        cmap = "RdBu_r",
-                       vmin = vel_min,
-                       vmax = vel_max,
+                       vmin = self.galaxy.config["plotting"]["panel"]["v_ha_min"][0],
+                       vmax = self.galaxy.config["plotting"]["panel"]["v_ha_max"][0],
                       )
-        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [-75, 0, 75])
+        ticks = [self.galaxy.config["plotting"]["panel"]["v_ha_min"][1], self.galaxy.config["plotting"]["panel"]["v_ha_max"][1]]
+        ticks.insert(1, int(np.average(ticks)))
+        cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = ticks)
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.98, r"$V_\mathrm{gas}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$V_\mathrm{gas}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
 
@@ -233,11 +260,11 @@ class panel_image:
                       )
         cbar = self.fig.colorbar(im, location = "right", pad = 0.04, ticks = [20, 120])
         cbar.ax.tick_params(direction = "in", labelsize = 7, pad = 3, rotation = 90, length = 1.5, width = 0.3)
-        ax.text(0.07, 0.98, r"$\sigma_\mathrm{gas}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
+        ax.text(0.03, 0.97, r"$\sigma_\mathrm{gas}$", fontsize = 8, ha = "left", va = "top", transform = ax.transAxes)
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
 
-    def make(self, filepath, rgb = False, Nr = 2):
+    def make(self, filepath, rgb = False, Nr = 2, png = False):
         if len(self.panels) != 6:
             raise IndexError("List of panels should have precisely six elements")
         self.optical(self.axis_grid[0:2, 0:2], rgb = rgb, Nr = Nr)
@@ -250,17 +277,297 @@ class panel_image:
             r = i // 3
             c = (i % 3) + 2
             getattr(self, self.panels[i])(self.axis_grid[r, c], xlim = xlim, ylim = ylim)
-        if args.png:
+        if png:
             self.fig.savefig(filepath + ".png", bbox_inches = "tight", pad_inches = 0.03)
         else:
             self.fig.savefig(filepath + ".pdf", bbox_inches = "tight", pad_inches = 0.03)
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("clifs_id", type = int)
-    parser.add_argument("--rgb", action = "store_true")
-    parser.add_argument("--Nr", default = 1.5, type = float)
-    parser.add_argument("--png", action = "store_true")
-    args = parser.parse_args()
-    panel_image(args.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}".format(args.clifs_id), rgb = args.rgb, Nr = args.Nr)
+def specfit(galaxy):
+    eline_labels = galaxy.config["plotting"]["specfit"]["eline_labels"]
+    zgal = galaxy.z
+    c = 2.998e+5
+    data_cube = fits.open(galaxy.config["files"]["cube_sci"])
+    model_cube = fits.open(galaxy.config["files"]["outdir_dap"] + "/weave-calibrated-LOGCUBE-HYB10-MILESHC-MASTARSSP.fits")
+    maps = fits.open(galaxy.config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-HYB10-MILESHC-MASTARSSP.fits")
+    flux = data_cube["FLUX"].data
+    ivar = data_cube["IVAR"].data
+    wcs = WCS(data_cube["FLUX"].header)
+    model_flux = model_cube["MODEL"].data
+    wcs_model = WCS(model_cube["MODEL"].header)
+    # Wavelength vector
+    nwave = flux.shape[0]
+    coo = np.array([np.ones(nwave), np.ones(nwave), np.arange(nwave) + 1]).T
+    wave_model = wcs_model.all_pix2world(coo, 1)[:, 2] * wcs.wcs.cunit[2].to("angstrom")
+    wave = (wcs.all_pix2world(coo, 1)[:,2] * wcs.wcs.cunit[2].to("angstrom")) * u.AA
+    wlum = wave.to(u.um).value
+    wave = ((1+1e-6*(287.6155+1.62887/wlum**2+0.01360/wlum**4)) * wave).to(u.AA).value
+    # Mask for ccd gaps
+    lgap_red = [7590, 7695]
+    lgap_blue = [5491, 5573]
+    mask_gap_red = np.greater(wave, lgap_red[0]) & np.less(wave, lgap_red[1])
+    mask_gap_blue = np.greater(wave, lgap_blue[0]) & np.less(wave, lgap_blue[1])
+    x, y = np.round(wcs.celestial.world_to_pixel(galaxy.c)).astype(int)
+    vel = galaxy.get_eline_map("Ha-6564", map = "GVEL")[y, x]
+    spec = flux[:, y, x]
+    spec_err = 1 / np.sqrt(ivar[:, y, x])
+    err = 1 / np.sqrt(ivar[:, y, x])
+    model_spec = model_flux[:, y, x]
+    spec[mask_gap_blue] = np.nan
+    spec[mask_gap_red] = np.nan
+    err[mask_gap_blue] = np.nan
+    err[mask_gap_red] = np.nan
+
+    plt.rcParams["text.usetex"] = True
+    fig, ax = plt.subplots(2, 2, figsize = (9.0, 4.5))
+    ## Full spectrum ##
+    ax[0, 0].axvspan(lgap_blue[0], lgap_blue[1], color = "k", lw = 0, alpha = 0.2)
+    ax[0, 0].axvspan(lgap_red[0], lgap_red[1], color = "k", lw = 0, alpha = 0.2)
+    ax[0, 0].plot(wave, spec, color = "k", lw = 1.0, drawstyle = "steps")
+    ax[0, 0].plot(wave_model, model_spec, color = "C0", lw = 0.8, drawstyle = "steps")
+    ax[0, 0].set_xlim(3725, 8000)
+    ax[0, 0].text(0.015, 0.97, r"CLIFS {}:$\;\;$({}, {})".format(galaxy.clifs_id, x, y), fontsize = 9,
+               ha = "left", va = "top", transform = ax[0, 0].transAxes)
+    ## OII, Hdelta, Hgamma ##
+    #Including an inset axis in order to zoom-in on the OII doublet
+    mask = np.greater(wave, 3701 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 4363 * (1 + zgal) * (1 + vel / c))
+    mask_model = np.greater(wave_model, 3701 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 4363 * (1 + zgal) * (1 + vel / c))
+    #ax[0, 1].fill_between(wave[mask], spec[mask] - 3*spec_err[mask], spec[mask] + 3*spec_err[mask], color = "k", lw = 0, alpha = 0.1, step = "pre")
+    ax[0, 1].plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax[0, 1].plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax[0, 1].set_xlim(wave[mask].min(), wave[mask].max())
+    #axin = ax[0, 1].inset_axes([0.1, 0.55, 0.25, 0.4], xlim = (3722 * (1 + zgal) * (1 + vel / c), 3735 * (1 + zgal) * (1 + vel / c)),
+    #                        ylim = ax[0, 1].get_ylim(), yticklabels = [])
+    #axin.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    #axin.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    #axin.set_yticks([])
+    #axin.tick_params(labelsize = 8)
+    ymin = ax[0, 1].get_ylim()[0]
+    ymax = ax[0, 1].get_ylim()[1]
+    # Adjust the ylim in order to fit in the line labels, probably far from the best way to do this...
+    if eline_labels:
+        ax[0, 1].text(4341 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\gamma}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[0, 1].vlines(4341 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[0, 1].text(4102 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\delta}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[0, 1].vlines(4102 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[0, 1].text(3728 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[0, 1].vlines([3727 * (1 + zgal) * (1 + vel / c), 3729 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[0, 1].set_ylim(ymin, 1.2 * ymax)
+    ## Hbeta, OIII ##
+    mask = np.greater(wave, 4840 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 5026 * (1 + zgal) * (1 + vel / c))
+    mask_model = np.greater(wave_model, 4840 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 5026 * (1 + zgal) * (1 + vel / c))
+    ax[1, 0].plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax[1, 0].plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax[1, 0].set_xlim(wave[mask].min(), wave[mask].max())
+    ymin = ax[1, 0].get_ylim()[0]
+    ymax = ax[1, 0].get_ylim()[1]
+    if eline_labels:
+        # Adjust the ylim in order to fit in the line labels, probably far from the best way to do this...
+        ax[1, 0].text(4862 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\beta}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 0].vlines(4862 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[1, 0].text(5008 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oiii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 0].text(4960 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oiii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 0].vlines([4960 * (1 + zgal) * (1 + vel / c), 5008 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[1, 0].set_ylim(ymin, 1.2 * ymax)
+    ## NII, Halpha, SII ##
+    mask = np.greater(wave, 6538 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 6744 * (1 + zgal) * (1 + vel / c))
+    mask_model = np.greater(wave_model, 6538 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 6744 * (1 + zgal) * (1 + vel / c))
+    ax[1, 1].plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax[1, 1].plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax[1, 1].set_xlim(wave[mask].min(), wave[mask].max())
+    ymin = ax[1, 1].get_ylim()[0]
+    ymax = ax[1, 1].get_ylim()[1]
+    if eline_labels:
+        # Adjust the ylim in order to fit in the line labels, probably far from the best way to do this...
+        ax[1, 1].text(6564 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\alpha}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 1].vlines(6564 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[1, 1].text(6549 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Nii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 1].text(6585 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Nii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 1].vlines([6549 * (1 + zgal) * (1 + vel / c), 6585 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[1, 1].text(6718 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Sii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 1].text(6732 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Sii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax[1, 1].vlines([6718 * (1 + zgal) * (1 + vel / c), 6732 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax[1, 1].set_ylim(ymin, 1.2 * ymax)
+    # Figure labels
+    fig.supxlabel(r"Wavelength$\;\;\mathrm{[\AA]}$", fontsize = 10)
+    fig.supylabel(r"Flux density$\;\;\mathrm{[10^{-17}\;erg\,s^{1}\,cm^{-2}\,\AA^{-1}}]$", fontsize = 10, x = 0.07)
+    # Save
+    fig.savefig("/arc/projects/CLIFS/plots/specfits/specfit_clifs{}_{}_{}.pdf".format(galaxy.clifs_id, x, y), bbox_inches = "tight", pad_inches = 0.03)
+
+def reproject_manga_map(data, snr, wcs, wcs_out, shape_out, method = "interp"):
+    # Factor of 0.25 is to convert MaNGA maps from pixel^-1 to arcsec^-2
+    if method == "interp":
+        map_reproj, footprint = reproject_interp((data / 0.25, wcs), wcs_out, shape_out = shape_out)
+        snr_reproj, footprint = reproject_interp((snr /  0.25, wcs), wcs_out, shape_out = shape_out)
+        return map_reproj, snr_reproj
+    elif method == "exact":
+        map_reproj, footprint = reproject_exact((data / 0.25, wcs), wcs_out, shape_out = shape_out)
+        snr_reproj, footprint = reproject_exact((snr /  0.25, wcs), wcs_out, shape_out = shape_out)
+        return map_reproj, snr_reproj
+    else:
+        raise ValueError("'method' must either be 'interp' or 'exact'")
+
+def compare_weave_manga(galaxy, line, fig = None, gax = None, j = None, sn_cut = 4, return_arrays = False):
+    weave_map, weave_wcs = galaxy.get_eline_map(line, return_wcs = True)
+    weave_ivar = galaxy.get_eline_map(line, map = "GFLUX_IVAR")
+    weave_sn = weave_map * np.sqrt(weave_ivar)
+    manga_map, manga_wcs = galaxy.get_eline_map(line, return_wcs = True, ifu = "manga")
+    manga_ivar = galaxy.get_eline_map(line, map = "GFLUX_IVAR", ifu = "manga")
+    manga_sn = manga_map * np.sqrt(manga_ivar)
+    manga_reproj, manga_sn = reproject_manga_map(manga_map, manga_sn, manga_wcs, weave_wcs, weave_map.shape, method = "exact")
+    mask_det = np.greater(weave_sn, sn_cut) & np.greater(manga_sn, sn_cut) & np.greater(weave_map, 0) & np.greater(manga_reproj, 0)
+    weave_map[~mask_det] = np.nan
+    manga_reproj[~mask_det] = np.nan
+    if return_arrays:
+        return list(manga_reproj[np.isfinite(manga_reproj)]), list(weave_map[np.isfinite(weave_map)])
+    weave_err = weave_map / weave_sn
+    manga_err = manga_reproj / manga_sn
+    delta = np.log10(weave_map.ravel() / manga_reproj.ravel())
+    mu = np.nanmedian(delta)
+    sig = np.nanstd(delta)
+    ax = fig.add_subplot(gax)
+    ax.errorbar(manga_reproj.ravel(), weave_map.ravel(), xerr = 0, yerr = 0, #xerr = manga_err.ravel(), yerr = weave_err.ravel(),
+                color = "k", ls = "none", marker = "o", mew = 0, ms = 3, alpha = 0.75, elinewidth = 0.75)
+    ax.plot([0.01, 1000], [0.01, 1000], color = "C1", ls = "--")
+    ax.set_aspect("equal")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(0.01, 1000)
+    ax.set_ylim(0.01, 1000)
+    ax.set_xticks([0.01, 1.0, 100])
+    ax.set_yticks([0.01, 1.0, 100])
+    ax.text(0.02, 0.98, line, fontsize = 10, ha = "left", va = "top", transform = ax.transAxes)
+    ax.text(0.98, 0.11, r"$\Delta = {:.2f}$".format(mu), fontsize = 10, ha = "right", va = "bottom", transform = ax.transAxes)
+    ax.text(0.98, 0.02, r"$\sigma = {:.2f}$".format(sig), fontsize = 10, ha = "right", va = "bottom", transform = ax.transAxes)
+    if j % 4 > 0:
+        ax.set_yticklabels([])
+    if j < 8:
+        ax.set_xticklabels([])
+    plt.minorticks_off()
+
+def weave_manga_line_fluxes(galaxy):
+    lines = np.array([
+                  "OII-3727",
+                  "OII-3729",
+                  "Hdel-4102",
+                  "Hgam-4341",
+                  "Hb-4862",
+                  "OIII-4960",
+                  "OIII-5008",
+                  "NII-6549",
+                  "Ha-6564",
+                  "NII-6585",
+                  "SII-6718",
+                  "SII-6732",
+                 ])
+    fig = plt.figure(figsize = (9.0, 6.75))
+    grid = gs.GridSpec(3, 4)
+    grid.update(wspace = 0.1, hspace = 0.1)
+    for j in range(lines.size):
+        compare_weave_manga(galaxy, lines[j], fig = fig, gax = grid[j], j = j)
+    fig.supxlabel(r"MaNGA:$\quad F_\lambda \;\; \mathrm{[erg\,s^{-1}\,cm^{-2}]}$", fontsize = 10, y = 0.04)
+    fig.supylabel(r"WEAVE:$\quad F_\lambda \;\; \mathrm{[erg\,s^{-1}\,cm^{-2}]}$", fontsize = 10, x = 0.05)
+    fig.savefig("/arc/projects/CLIFS/plots/manga_comparison/weave_manga_line_fluxes_clifs{}.pdf".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
+
+def fiber_map(x0, y0, header):
+    y_spacing = 3.4 / 3600 / header["PC2_2"]
+    x_spacing = y_spacing * np.cos(np.radians(30))
+    diameter = 2.6 / 3600 / header["PC2_2"]
+    Ny = np.arange(-13, 14)
+    Nx = np.arange(-13, 14)
+    patches = []
+    vertices = ((0., 13.), (-13., 6.5), (-13., -6.5), (0., -13.), (13., -6.5), (13., 6.5)) # CW from top
+    m1 = (vertices[0][1] - vertices[1][1]) / (vertices[0][0] - vertices[1][0])
+    b1 = vertices[0][1] - m1 * vertices[0][0]
+    m2 = (vertices[2][1] - vertices[3][1]) / (vertices[2][0] - vertices[3][0])
+    b2 = vertices[2][1] - m2 * vertices[2][0]
+    m3 = (vertices[3][1] - vertices[4][1]) / (vertices[3][0] - vertices[4][0])
+    b3 = vertices[3][1] - m3 * vertices[3][0]
+    m4 = (vertices[5][1] - vertices[0][1]) / (vertices[5][0] - vertices[0][0])
+    b4 = vertices[5][1] - m4 * vertices[5][0]
+    for i in Nx:
+        for j in Ny:
+            if (j > i * m1 + b1) or (j + 1 <= i * m2 + b2) or (j + 1 <= i * m3 + b3) or (j > i * m4 + b4):
+                continue
+            else:
+                if i % 2 == 0:
+                    p = Circle((x0 + i * x_spacing, y0 + j * y_spacing), radius = diameter / 2)
+                else:
+                    p = Circle((x0 + i * x_spacing, y0 + j * y_spacing + y_spacing / 2), radius = diameter / 2)
+                patches.append(p)
+    return patches
+
+def LIFU_boundary(galaxy):
+    img, img_h = galaxy.get_cutout_image("cfht", "G", header = True)
+    cd = img_h["PC2_2"]
+    coord_pnt = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, unit = "deg")
+    x_pnt, y_pnt = WCS(img_h).celestial.world_to_pixel(coord_pnt)
+    patch = RegularPolygon((x_pnt, y_pnt), numVertices = 6, radius = 45 / 3600 / cd, ec = "w", fc = "none")
+    return patch
+
+def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
+    img, img_h = galaxy.get_cutout_image("cfht", "G", header = True)
+    x0, y0 = WCS(img_h).celestial.world_to_pixel(galaxy.c)
+    cd = img_h["PC2_2"]
+    fig = plt.figure(figsize = (4.5, 4.5))
+    ax = fig.add_subplot(1, 1, 1, projection = WCS(img_h).celestial)
+    coord_pnt = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, unit = "deg")
+    x_pnt, y_pnt = WCS(img_h).celestial.world_to_pixel(coord_pnt)
+    xlim = [int(x_pnt - 0.75 / 60 / cd), int(x_pnt + 0.75 / 60 / cd)]
+    ylim = [int(y_pnt - 0.75 / 60 / cd), int(y_pnt + 0.75 / 60 / cd)]
+    if rgb:
+        imgU, imgU_h = galaxy.get_cutout_image("cfht", "U", header = True)
+        imgI, imgI_h = galaxy.get_cutout_image("cfht", "I2", header = True)
+        normU = ImageNormalize(imgU, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
+        normG = ImageNormalize(img, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
+        normI = ImageNormalize(imgI, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
+        rgb_array = np.array([normI(imgI), normG(img), normU(imgU)])
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        ax.imshow(np.moveaxis(rgb_array, 0, -1))
+        #fiber_patches = fiber_map(x_pnt, y_pnt, img_h)
+        #collection = PatchCollection(fiber_patches)
+        #collection.set_edgecolor("w")
+        #collection.set_facecolor("none")
+        #collection.set_linewidth(0.5)
+        #collection.set_alpha(0.25)
+        patch = LIFU_boundary(galaxy)
+        ax.add_patch(patch)
+        ax.coords["ra"].set_axislabel("RA")
+        ax.coords["dec"].set_axislabel("Dec")
+        fig.savefig("/arc/projects/CLIFS/plots/fiber_overlay/fiber_overlay_image_clifs{}.pdf".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
+    else:
+        norm = ImageNormalize(img, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        ax.imshow(img, norm = norm, cmap = "binary")
+
+def _plot_r90(galaxy, ax, wcs):
+    sky_aper = SkyEllipticalAperture(galaxy.c, galaxy.r90, galaxy.r90 * (1 - galaxy.ell), theta = galaxy.pa)
+    px_aper = sky_aper.to_pixel(wcs)
+    px_aper.plot(ax = ax, fc = "none", ec = "k", ls = "--")
+
+def ha_tail_plot(galaxy):
+    flux, wcs = galaxy.get_eline_map("Ha-6564", return_wcs = True)
+    flux_sn = flux * np.sqrt(galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR"))
+    flux[flux_sn < 4] = np.nan
+    fig = plt.figure(figsize = (4.5, 4.5))
+    ax = fig.add_subplot(1, 1, 1, projection = wcs)
+    norm = ImageNormalize(flux, vmin = galaxy.config["plotting"]["tail"]["vmin"], vmax = galaxy.config["plotting"]["tail"]["vmax"], stretch = SqrtStretch())
+    ax.imshow(flux, norm = norm, cmap = "viridis")
+    _plot_r90(galaxy, ax, wcs)
+    ax.coords["ra"].set_axislabel("RA")
+    ax.coords["dec"].set_axislabel("Dec")
+    fig.savefig("/arc/projects/CLIFS/plots/ha_tail_plots/ha_tail_clifs{}.pdf".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
+
+def plots_for_clifspipe(galaxy):
+    panel_image(galaxy.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}".format(galaxy.clifs_id), rgb = True, Nr = 1.5)
+    specfit(galaxy)
+    fiber_overlay_plot(galaxy, rgb = True)
+    if galaxy.manga:
+        weave_manga_line_fluxes(galaxy)
+    if galaxy.tail:
+        ha_tail_plot(galaxy)

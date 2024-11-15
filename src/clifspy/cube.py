@@ -126,14 +126,14 @@ def bkg_sub(config, data, wcs, verbose = False):
         for ch in trange(data.shape[0], desc = "Subtracting background"):
             sigma_clip = SigmaClip(sigma = 3.0)
             bkg_estimator = MedianBackground()
-            bkg = Background2D(data[ch, :, :], (20, 20), filter_size=(3, 3), mask = mask.astype(bool),
+            bkg = Background2D(data[ch, :, :], (8, 8), filter_size=(3, 3), mask = mask.astype(bool),
                                 sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
             data[ch, :, :] = data[ch, :, :] - bkg.background
     else:
         for ch in range(data.shape[0]):
             sigma_clip = SigmaClip(sigma = 3.0)
             bkg_estimator = MedianBackground()
-            bkg = Background2D(data[ch, :, :], (20, 20), filter_size=(3, 3), mask = mask.astype(bool),
+            bkg = Background2D(data[ch, :, :], (8, 8), filter_size=(3, 3), mask = mask.astype(bool),
                                 sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
             data[ch, :, :] = data[ch, :, :] - bkg.background
 

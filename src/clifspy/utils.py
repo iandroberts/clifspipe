@@ -39,6 +39,26 @@ def _populate_galaxy(args, file, tclifs):
     print('r90 = {:.3e}'.format(r90), file = file)
     print("", file = file)
 
+def _populate_data_coverage(args, file, tclifs):
+    print('[data_coverage]', file = file)
+    if tclifs["manga_obs"]:
+        print('manga = true', file = file)
+    else:
+        print('manga = false', file = file)
+    if tclifs["weave_obs"]:
+        print('weave = true', file = file)
+    else:
+        print('weave = false', file = file)
+    if "ACA" in tclifs["CO_flag"]:
+        print('aca = true', file = file)
+    else:
+        print('aca = false', file = file)
+    if "IRAM" in tclifs["CO_flag"]:
+        print('iram = true', file = file)
+    else:
+        print('iram = false', file = file)
+    print("", file = file)
+
 def _populate_cube(args, file):
     print('[cube]', file = file)
     print('xmin = {}'.format(args.xmin), file = file)
@@ -59,12 +79,12 @@ def _populate_files(args, file):
             print('cube_blue = "{}"'.format(paths[1]), file = file)
             print('cube_red = "{}"'.format(paths[0]), file = file)
         print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file = file)
-        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/"'.format(args.clifs_id), file = file)
-        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}/"'.format(args.clifs_id), file = file)
+        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file = file)
+        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file = file)
     elif len(paths) == 0:
         logger.info("No 'stackcube' files found")
-        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/"'.format(args.clifs_id), file = file)
-        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}/"'.format(args.clifs_id), file = file)
+        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file = file)
+        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file = file)
         print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file = file)
     else:
         raise Exception("Strange number of matches from file search")
@@ -83,20 +103,38 @@ def _populate_pipeline(args, file):
     print('hdf5 = {}'.format(args.hdf5), file = file)
     print('verbose = {}'.format(args.verbose), file = file)
     print('clobber = {}'.format(args.clobber), file = file)
+    print("", file = file)
+
+def _populate_plotting(file):
+    print('[plotting]', file = file)
+    print('sn_min = [1, 2]', file = file)
+    print('sn_max = [32, 30]', file = file)
+    print('v_star_min = [-100, -75]', file = file)
+    print('v_star_max = [100, 75]', file = file)
+    print('vdisp_star_min = [0, 10]', file = file)
+    print('vdisp_star_max = [100, 90]', file = file)
+    print('dn4000_min = [1.0, 1.1]', file = file)
+    print('dn4000_max = [2.0, 1.9]', file = file)
+    print('flux_ha_min = [0, 5]', file = file)
+    print('flux_ha_max = [50, 45]', file = file)
+    print('v_ha_min = [-100, -75]', file = file)
+    print('v_ha_max = [100, 75]', file = file)
+    print('eline_labels = true', file = file)
 
 def make_config_file(args):
     clifstab = Table.read("/arc/projects/CLIFS/catalogs/clifs_master_catalog.fits")
     tclifs = clifstab[clifstab["clifs_id"] == args.clifs_id]
     file = open(f"/arc/projects/CLIFS/config_files/clifs_{args.clifs_id}.toml", "w")
-
     _populate_galaxy(args, file, tclifs)
+    _populate_data_coverage(args, file, tclifs)
     _populate_cube(args, file)
     _populate_files(args, file)
     _populate_pipeline(args, file)
+    _populate_plotting(file)
 
 def sky_cutout_from_image(img, coord, size, wcs):
     cut = Cutout2D(img, coord, size, wcs = wcs)
-    return cut.data, cut.wcs.to_header() 
+    return cut.data, cut.wcs.to_header()
 
 def eline_lookup(line):
     # Lookup table to convert line name to correct extension in MaNGA-DAP maps file

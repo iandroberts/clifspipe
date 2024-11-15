@@ -85,8 +85,8 @@ def format_output_header(hdr, shape, telescope, filter):
     hdr["FILTER"] = filter
     return hdr
 
-def cutout_from_image(galaxy, telescope, filter, Nr90 = 4):
-    coord = SkyCoord(galaxy.ra, galaxy.dec, unit = "deg")
+def cutout_from_image(galaxy, telescope, filter):
+    coord = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, unit = "deg")
     if telescope == "cfht":
         field = find_cfht_field(coord)
         img_path = "/arc/projects/CLIFS/multiwav/{}-{}/{}.{}.fits".format(telescope, filter, field, filter)
@@ -101,7 +101,7 @@ def cutout_from_image(galaxy, telescope, filter, Nr90 = 4):
     img, img_h = hdul[0].data, hdul[0].header
     wcs = WCS(img_h)
     img = units_to_MJysr(img, img_h, telescope, filter)
-    img_cut, img_cut_h = utils.sky_cutout_from_image(img, coord, Nr90 * galaxy.config["galaxy"]["r90"] * u.arcsec, wcs)
+    img_cut, img_cut_h = utils.sky_cutout_from_image(img, coord, 1.5 * u.arcmin, wcs)
     out_hdr = format_output_header(img_cut_h, img_cut.shape, telescope, filter)
     outdir = "/arc/projects/CLIFS/multiwav/cutouts/clifs{}".format(galaxy.clifs_id)
     if not os.path.exists(outdir):
@@ -110,7 +110,7 @@ def cutout_from_image(galaxy, telescope, filter, Nr90 = 4):
     hdu.writeto(outdir + "/{}-{}.fits".format(telescope, filter), overwrite = True)
     hdul.close()
 
-def make_multiwav_cutouts(galaxy, Nr90 = 4):
+def make_multiwav_cutouts(galaxy):
     all_filters = {
                    "galex": ["fuv", "nuv"],
                    "cfht": ["U", "G", "I2"],
@@ -119,7 +119,7 @@ def make_multiwav_cutouts(galaxy, Nr90 = 4):
     for telescope in list(all_filters.keys()):
         for filter in all_filters[telescope]:
             logger.info("Making {}: {}".format(telescope, filter))
-            cutout_from_image(galaxy, telescope, filter, Nr90 = Nr90)
+            cutout_from_image(galaxy, telescope, filter)
 
 if __name__ == "__main__":
     this_galaxy = galaxy(151)
