@@ -8,7 +8,7 @@ import clifspy.utils as utils
 import os
 import logging
 import re
-from astropy.stats import sigma_clipped_stats
+from astropy.stats import sigma_clipped_stats, gaussian_fwhm_to_sigma
 from photutils.segmentation import (detect_sources,
                                     make_2dgaussian_kernel)
 from astropy.convolution import convolve_fft
@@ -40,6 +40,14 @@ def find_cfht_field(coord):
     else:
         return "G007.{}+{}".format(ra_cent[ind], dec_cent[ind])
 
+def find_lofar_field(coord):
+    ra_cent = [192.945, 195.856, 195.339]
+    dec_cent = [27.2272, 27.2426, 29.7498]
+    fields = ["p192+27", "p195+27", "p195+30"]
+    coord_cent = SkyCoord(ra_cent, dec_cent, unit = "deg")
+    ind = np.argmin(coord.separation(coord_cent).arcminute)
+    return fields[ind]
+
 def units_to_MJysr(img, img_h, telescope, filter):
     if telescope == "cfht":
         fv = img * np.power(10, (8.90 - img_h["PHOTZP"]) / 2.5) * u.Jy
@@ -68,6 +76,10 @@ def units_to_MJysr(img, img_h, telescope, filter):
             raise ValueError("Invalid GALEX filter")
         Sv = fv / (img_h["CDELT2"] * u.deg) ** 2
         return Sv.to(u.MJy / u.sr).value
+    elif telescope == "lofar":
+        Abm = 2 * np.pi * (img_h["BMIN"] * u.deg) * (img_h["BMAJ"] * u.deg) * gaussian_fwhm_to_sigma ** 2
+        Sv = (img * u.Jy) / Abm
+        return Sv.to(u.MJy / u.sr).value
     else:
         raise ValueError("Telescope ({}) is  not supported".format(telescope))
 
@@ -95,6 +107,9 @@ def cutout_from_image(galaxy, telescope, filter):
         img_path = "/arc/projects/CLIFS/multiwav/{}-{}/HATLAS_NGP_DR2_BACKSUB{}.FITS".format(telescope, filter, wav)
     elif telescope == "galex":
         img_path = "/arc/projects/CLIFS/multiwav/{}/mosaic_{}.fits".format(telescope, filter)
+    elif telescope == "lofar":
+        field = find_lofar_field(coord)
+        img_path = "/arc/projects/CLIFS/multiwav/{}-{}/mosaic-blanked-{}.fits".format(telescope, filter, field)
     else:
         raise ValueError("Telescope ({}) is  not supported".format(telescope))
     hdul = fits.open(img_path)
@@ -115,12 +130,9 @@ def make_multiwav_cutouts(galaxy):
                    "galex": ["fuv", "nuv"],
                    "cfht": ["U", "G", "I2"],
                    "herschel": ["pacs100", "pacs160", "spire250", "spire350", "spire500"],
+                   "lofar": ["hba"],
                   }
     for telescope in list(all_filters.keys()):
         for filter in all_filters[telescope]:
             logger.info("Making {}: {}".format(telescope, filter))
             cutout_from_image(galaxy, telescope, filter)
-
-if __name__ == "__main__":
-    this_galaxy = galaxy(151)
-    make_multiwav_cutouts(this_galaxy)

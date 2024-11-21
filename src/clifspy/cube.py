@@ -1,6 +1,7 @@
 ## TO-DO:
 # - Pass value for alpha to ivar_sum that does not break the spatial downsampling function
-
+# - fix background subtraction. sky box? polynomial fit?
+from clifspy.utils import eline_mask
 import argparse
 from astropy.io import fits
 import matplotlib.pyplot as plt
@@ -36,27 +37,31 @@ def _ivar_sum(arr, axis):
 def _standard_err_mean(arr, axis):
     return np.nanmean(arr, axis = axis) / np.sqrt(2)
 
-def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, ext_ivar = 2, ext_fluxcal = 5, bkgsub = False,
+def preprocess_cube(fname, galaxy, hdul, arm, downsample_wav = False, ext = 1, ext_ivar = 2, ext_fluxcal = 5, bkgsub = False,
                     clobber = False, fill_ccd_gaps = False, verbose = False, fullfield = False):
     cal_data = hdul[ext].data * hdul[ext_fluxcal].data[:, None, None]
     cal_ivar = hdul[ext_ivar].data * (1 / hdul[ext_fluxcal].data[:, None, None] ** 2)
-
-    if config["cube"]["xmin"] == -99:
-        fullfield = True
-
-    if not fullfield:
-        xmin_py = config["cube"]["xmin"] - 1
-        xmax_py = config["cube"]["xmax"] - 1
-        ymin_py = config["cube"]["ymin"] - 1
-        ymax_py = config["cube"]["ymax"] - 1
-        cal_data = cal_data[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
-        cal_ivar = cal_ivar[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
 
     wcs = WCS(hdul[ext].header)
     cdelt = hdul[ext].header["CD2_2"]
     nwave = cal_data.shape[0]
     coo = np.array([np.ones(nwave), np.ones(nwave), np.arange(nwave)+1]).T
     wave_orig = wcs.all_pix2world(coo, 1)[:,2]*wcs.wcs.cunit[2].to('angstrom')
+
+    if galaxy.config["cube"]["xmin"] == -99:
+        fullfield = True
+
+    if bkgsub:
+        cal_data = bkg_sub(galaxy, cal_data, wave_orig, wcs)
+
+    if not fullfield:
+        xmin_py = galaxy.config["cube"]["xmin"] - 1
+        xmax_py = galaxy.config["cube"]["xmax"] - 1
+        ymin_py = galaxy.config["cube"]["ymin"] - 1
+        ymax_py = galaxy.config["cube"]["ymax"] - 1
+        cal_data = cal_data[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
+        cal_ivar = cal_ivar[:, ymin_py:ymax_py+1, xmin_py:xmax_py+1]
+
     Afibre = np.pi * (2.6 / 2.) ** 2
     Apx = (3600 * cdelt) ** 2
     cal_data /= ((Afibre / Apx) * 1e-17)
@@ -69,7 +74,6 @@ def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, e
     else:
         wave = wave_orig.copy()
         dwave = np.median(np.diff(wave))
-
     if fill_ccd_gaps:
         cal_data = fill_ccd_gaps(wave, cal_data, arm, verbose = verbose)
         cal_ivar = fill_ccd_gaps(wave, cal_ivar, arm, verbose = verbose)
@@ -93,9 +97,6 @@ def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, e
         head_new["CRPIX2"] = (hdul[ext].header["CRPIX2"], "Pixel coordinate of reference point")
     head_new["CRPIX3"] = (1.0, "Pixel coordinate of reference point")
 
-    if bkgsub:
-        cal_data = bkg_sub(config, cal_data, WCS(head_new), verbose = verbose)
-
     prim_hdu = fits.PrimaryHDU(header = hdul[0].header)
     #head_new = hdul[ext].header
     head_new["BUNIT"] = ("1E-17 erg/(s cm2 Ang)", "units of image")
@@ -104,39 +105,49 @@ def preprocess_cube(fname, config, hdul, arm, downsample_wav = False, ext = 1, e
     head_new["BUNIT"] = ("1E34 (s2 cm4 Ang2)/erg2", "units of image")
     ivar_hdu = fits.ImageHDU(data = cal_ivar, header = head_new, name = "IVAR")
     hdul_out = fits.HDUList([prim_hdu, data_hdu, ivar_hdu])
-
     name_split = fname.split(".fit")[0]
     hdul_out.writeto(name_split + "_cal.fit", overwrite = clobber)
     hdul_out.close()
     return name_split + "_cal.fit"
 
-def bkg_sub(config, data, wcs, verbose = False):
-    if config["pipeline"]["bkgsub_galmask"]:
-        reff = config["galaxy"]["reff"] * u.arcsec
-        ba = 1 - config["galaxy"]["ell"]
-        pa = config["galaxy"]["pa"] * u.deg
-        coord = SkyCoord(ra = config["galaxy"]["ra"], dec = config["galaxy"]["dec"], unit = "deg")
+def bkg_sub(galaxy, data, wave, wcs):
+    #for ch in range(data.shape[0]):
+        #xmin = config["cube"]["xmin_sky"]
+        #xmax = config["cube"]["xmax_sky"]
+        #ymin = config["cube"]["ymin_sky"]
+        #ymax = config["cube"]["ymax_sky"]
+        #if len(xmin) == 0:
+            #bkg = np.median(data[ch, ymin:ymax+1, xmin:xmax+1])
+        #else:
+            #bkg_list = []
+            #for i in range(len(xmin)):
+                #bkg_list.extend(data[ch, ymin[i]:ymax[i]+1, xmin[i]:xmax[i]+1].flatten())
+            #bkg = np.median(bkg_list)
+        #data[ch, :, :] = data[ch, :, :] - bkg
+    if galaxy.config["pipeline"]["bkgsub_galmask"]:
+        reff = galaxy.config["galaxy"]["reff"] * u.arcsec
+        ba = 1 - galaxy.config["galaxy"]["ell"]
+        pa = galaxy.config["galaxy"]["pa"] * u.deg
+        coord = SkyCoord(ra = galaxy.config["galaxy"]["ra"], dec = galaxy.config["galaxy"]["dec"], unit = "deg")
         aper = SkyEllipticalAperture(coord, 2 * reff, 2 * ba * reff, theta = pa)
         aper_px = aper.to_pixel(wcs.dropaxis(2))
         mask = aper_px.to_mask().to_image(data.shape[1:])
     else:
         mask = np.zeros(data.shape[1:])
-
-    if verbose:
-        for ch in trange(data.shape[0], desc = "Subtracting background"):
-            sigma_clip = SigmaClip(sigma = 3.0)
-            bkg_estimator = MedianBackground()
-            bkg = Background2D(data[ch, :, :], (8, 8), filter_size=(3, 3), mask = mask.astype(bool),
-                                sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
+    line_mask = eline_mask(wave, galaxy.z)
+    assert line_mask.size == data.shape[0]
+    bkg_cube = np.zeros(data.shape)
+    for ch in range(data.shape[0]):
+        sigma_clip = SigmaClip(sigma = 3.0)
+        bkg_estimator = MedianBackground()
+        bkg = Background2D(data[ch, :, :], (10, 10), filter_size = (5, 5), mask = mask.astype(bool),
+                            sigma_clip = sigma_clip, bkg_estimator = bkg_estimator)
+        if line_mask[ch]:
+            bkg_cube[ch, :, :] = bkg.background
             data[ch, :, :] = data[ch, :, :] - bkg.background
-    else:
-        for ch in range(data.shape[0]):
-            sigma_clip = SigmaClip(sigma = 3.0)
-            bkg_estimator = MedianBackground()
-            bkg = Background2D(data[ch, :, :], (8, 8), filter_size=(3, 3), mask = mask.astype(bool),
-                                sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
-            data[ch, :, :] = data[ch, :, :] - bkg.background
-
+        else:
+            data[ch, :, :] = data[ch, :, :] - bkg_cube[ch - 1, :, :]
+            bkg_cube[ch, :, :] = bkg_cube[ch - 1, :, :]
     return data
 
 def downsample_wav_axis(wave, data, method, return_wave = False, verbose = False):
@@ -303,12 +314,11 @@ def generate_cube(galaxy, fullfield = False):
 
     hdul_blue = fits.open(fname_blue)
     hdul_red = fits.open(fname_red)
-
-    cal_fname_red = preprocess_cube(fname_red, galaxy.config, hdul_red, "red", downsample_wav = galaxy.config["pipeline"]["downsample_wav"],
+    cal_fname_red = preprocess_cube(fname_red, galaxy, hdul_red, "red", downsample_wav = galaxy.config["pipeline"]["downsample_wav"],
                                     bkgsub = galaxy.config["pipeline"]["bkgsub"], clobber = galaxy.config["pipeline"]["clobber"],
                                     fill_ccd_gaps = galaxy.config["pipeline"]["fill_ccd_gaps"], verbose = galaxy.config["pipeline"]["verbose"],
                                     fullfield = fullfield)
-    cal_fname_blue = preprocess_cube(fname_blue, galaxy.config, hdul_blue, "blue", downsample_wav = galaxy.config["pipeline"]["downsample_wav"],
+    cal_fname_blue = preprocess_cube(fname_blue, galaxy, hdul_blue, "blue", downsample_wav = galaxy.config["pipeline"]["downsample_wav"],
                                      bkgsub = galaxy.config["pipeline"]["bkgsub"], clobber = galaxy.config["pipeline"]["clobber"],
                                      fill_ccd_gaps = galaxy.config["pipeline"]["fill_ccd_gaps"], verbose = galaxy.config["pipeline"]["verbose"],
                                      fullfield = fullfield)
@@ -321,7 +331,6 @@ def generate_cube(galaxy, fullfield = False):
     ivar_blue = SpectralCube.read(cal_fname_blue, hdu = 2)
     ivar_red = SpectralCube.read(cal_fname_red, hdu = 2)
     logger.info("Read flux-calibrated cubes")
-
     if galaxy.config["pipeline"]["downsample_spatial"]:
         cube_blue = downsample_cube_spatial(cube_blue, [1, 2], "flux", factor = galaxy.config["pipeline"]["factor_spatial"],
                                             verbose = galaxy.config["pipeline"]["verbose"])
@@ -333,10 +342,10 @@ def generate_cube(galaxy, fullfield = False):
                                            verbose = galaxy.config["pipeline"]["verbose"])
         logger.info("Done spatial binning")
 
-    cube_blue = reproject_spectral_axis(cube_blue, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
-    cube_red = reproject_spectral_axis(cube_red, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
-    ivar_blue = reproject_spectral_axis(ivar_blue, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
-    ivar_red = reproject_spectral_axis(ivar_red, 3700 * u.AA, 9000 * u.AA, 1. * u.AA, verbose = galaxy.config["pipeline"]["verbose"])
+    cube_blue = reproject_spectral_axis(cube_blue, 3700 * u.AA, 9000 * u.AA, cube_blue.header["CDELT3"] * u.m, verbose = galaxy.config["pipeline"]["verbose"])
+    cube_red = reproject_spectral_axis(cube_red, 3700 * u.AA, 9000 * u.AA, cube_blue.header["CDELT3"] * u.m, verbose = galaxy.config["pipeline"]["verbose"])
+    ivar_blue = reproject_spectral_axis(ivar_blue, 3700 * u.AA, 9000 * u.AA, cube_blue.header["CDELT3"] * u.m, verbose = galaxy.config["pipeline"]["verbose"])
+    ivar_red = reproject_spectral_axis(ivar_red, 3700 * u.AA, 9000 * u.AA, cube_blue.header["CDELT3"] * u.m, verbose = galaxy.config["pipeline"]["verbose"])
     logger.info("Reprojected red and blue cubes onto common spectral axis")
     cube_full, ivar_full = stitch_cubes(cube_blue, cube_red, ivar_blue, ivar_red)
     logger.info("Combined red and blue cubes")

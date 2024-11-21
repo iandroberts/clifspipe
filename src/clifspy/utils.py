@@ -1,3 +1,4 @@
+import numpy as np
 import argparse
 from astropy.table import Table
 import glob
@@ -211,3 +212,16 @@ def eline_lookup(line):
         return 34
     else:
         raise ValueError("Invalid line name, see: https://sdss-mangadap.readthedocs.io/en/latest/datamodel.html")
+
+def eline_mask(wave, z, medium = "air", dv = 500, bright_only = False):
+    if medium == "air":
+        rest_wav = np.array([3726.032, 3728.815, 3750.158, 3770.637, 3797.904, 3835.391, 3868.760, 3888.647, 3889.064, 3967.470,
+                             3970.079, 4101.742, 4340.471, 4685.710, 4861.333, 4958.911, 5006.843, 5197.902, 5200.257, 5875.624,
+                             6300.304, 6363.776, 6548.050, 6562.819, 6583.460, 6716.440, 6730.810, 7065.196, 7135.790, 7751.060,
+                             9014.909, 9068.600, 9229.014, 9531.100, 9545.969])
+        mask = np.ones(wave.size).astype(bool)
+        for rw in rest_wav:
+            w = rw * (1 + z)
+            dl = w * (dv / 2.998e+5)
+            mask[(wave > w - dl) & (wave < w + dl)] = False
+        return mask

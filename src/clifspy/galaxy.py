@@ -51,12 +51,26 @@ class galaxy:
             raise ValueError("Invalid ifu")
         return mapsfile
 
-    def get_eline_map(self, line, map = "GFLUX", return_wcs = False, ifu = "weave"):
+    def get_eline_map(self, line, map = "GFLUX", return_map = True, return_wcs = False, ifu = "weave"):
         mapsfile = self.get_maps(ifu = ifu)
-        if return_wcs:
+        if return_wcs and return_map:
             return mapsfile["EMLINE_{}".format(map)].data[eline_lookup(line)], WCS(mapsfile["EMLINE_GFLUX"].header).celestial
-        else:
+        elif return_map:
             return mapsfile["EMLINE_{}".format(map)].data[eline_lookup(line)]
+        else:
+            return WCS(mapsfile["EMLINE_GFLUX"].header).celestial
+
+    def get_spectrum(self, x, y):
+        data_cube = fits.open(self.config["files"]["cube_sci"])
+        flux = data_cube["FLUX"].data
+        ivar = data_cube["IVAR"].data
+        wcs = WCS(data_cube["FLUX"].header)
+        nwave = flux.shape[0]
+        coo = np.array([np.ones(nwave), np.ones(nwave), np.arange(nwave) + 1]).T
+        wave = (wcs.all_pix2world(coo, 1)[:,2] * wcs.wcs.cunit[2].to("angstrom")) * u.AA
+        x, y = np.round(wcs.celestial.world_to_pixel(self.c)).astype(int)
+        data_cube.close()
+        return wave.value, flux[:, y, x], ivar[:, y, x]
 
 class get_cube:
     def __init__(self, galaxy):

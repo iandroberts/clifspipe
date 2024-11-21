@@ -1,3 +1,4 @@
+from astropy.stats import sigma_clipped_stats
 from photutils.aperture import SkyEllipticalAperture
 from astropy.coordinates import SkyCoord
 from matplotlib.patches import Circle, RegularPolygon
@@ -277,10 +278,8 @@ class panel_image:
             r = i // 3
             c = (i % 3) + 2
             getattr(self, self.panels[i])(self.axis_grid[r, c], xlim = xlim, ylim = ylim)
-        if png:
-            self.fig.savefig(filepath + ".png", bbox_inches = "tight", pad_inches = 0.03)
-        else:
-            self.fig.savefig(filepath + ".pdf", bbox_inches = "tight", pad_inches = 0.03)
+        self.fig.savefig(filepath + ".png", bbox_inches = "tight", pad_inches = 0.03)
+        self.fig.savefig(filepath + ".pdf", bbox_inches = "tight", pad_inches = 0.03)
 
 def specfit(galaxy):
     eline_labels = galaxy.config["plotting"]["specfit"]["eline_labels"]
@@ -318,80 +317,99 @@ def specfit(galaxy):
     err[mask_gap_red] = np.nan
 
     plt.rcParams["text.usetex"] = True
-    fig, ax = plt.subplots(2, 2, figsize = (9.0, 4.5))
+    fig = plt.figure(figsize = (9.0, 6.0))
+    grid = gs.GridSpec(3, 2)
+    grid.update(hspace = 0.3)
+    ax = fig.add_subplot(grid[0, 0:2])
+    #fig, ax = plt.subplots(2, 2, figsize = (9.0, 4.5))
     ## Full spectrum ##
-    ax[0, 0].axvspan(lgap_blue[0], lgap_blue[1], color = "k", lw = 0, alpha = 0.2)
-    ax[0, 0].axvspan(lgap_red[0], lgap_red[1], color = "k", lw = 0, alpha = 0.2)
-    ax[0, 0].plot(wave, spec, color = "k", lw = 1.0, drawstyle = "steps")
-    ax[0, 0].plot(wave_model, model_spec, color = "C0", lw = 0.8, drawstyle = "steps")
-    ax[0, 0].set_xlim(3725, 8000)
-    ax[0, 0].text(0.015, 0.97, r"CLIFS {}:$\;\;$({}, {})".format(galaxy.clifs_id, x, y), fontsize = 9,
-               ha = "left", va = "top", transform = ax[0, 0].transAxes)
+    ax.axvspan(lgap_blue[0], lgap_blue[1], color = "k", lw = 0, alpha = 0.2)
+    ax.axvspan(lgap_red[0], lgap_red[1], color = "k", lw = 0, alpha = 0.2)
+    ax.plot(wave, spec, color = "k", lw = 1.0, drawstyle = "steps")
+    ax.plot(wave_model, model_spec, color = "C0", lw = 0.8, drawstyle = "steps")
+    ax.set_xlim(3725, 8000)
+    ax.text(0.015, 0.97, r"CLIFS {}:$\;\;$({}, {})".format(galaxy.clifs_id, x, y), fontsize = 9,
+               ha = "left", va = "top", transform = ax.transAxes)
     ## OII, Hdelta, Hgamma ##
+    ax = fig.add_subplot(grid[1, 0])
     #Including an inset axis in order to zoom-in on the OII doublet
-    mask = np.greater(wave, 3701 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 4363 * (1 + zgal) * (1 + vel / c))
-    mask_model = np.greater(wave_model, 3701 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 4363 * (1 + zgal) * (1 + vel / c))
+    mask = np.greater(wave, 3701 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 4020 * (1 + zgal) * (1 + vel / c))
+    mask_model = np.greater(wave_model, 3701 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 4020 * (1 + zgal) * (1 + vel / c))
     #ax[0, 1].fill_between(wave[mask], spec[mask] - 3*spec_err[mask], spec[mask] + 3*spec_err[mask], color = "k", lw = 0, alpha = 0.1, step = "pre")
-    ax[0, 1].plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
-    ax[0, 1].plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
-    ax[0, 1].set_xlim(wave[mask].min(), wave[mask].max())
-    #axin = ax[0, 1].inset_axes([0.1, 0.55, 0.25, 0.4], xlim = (3722 * (1 + zgal) * (1 + vel / c), 3735 * (1 + zgal) * (1 + vel / c)),
-    #                        ylim = ax[0, 1].get_ylim(), yticklabels = [])
-    #axin.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
-    #axin.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
-    #axin.set_yticks([])
-    #axin.tick_params(labelsize = 8)
-    ymin = ax[0, 1].get_ylim()[0]
-    ymax = ax[0, 1].get_ylim()[1]
+    ax.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax.set_xlim(wave[mask].min(), wave[mask].max())
+    axin = ax.inset_axes([0.25, 0.55, 0.6, 0.4], xlim = (3732 * (1 + zgal) * (1 + vel / c), 4000 * (1 + zgal) * (1 + vel / c)),
+                            ylim = galaxy.config["plotting"]["specfit"]["inset_ylim"], yticklabels = [])
+    axin.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    axin.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    axin.set_yticks([])
+    axin.tick_params(labelsize = 8)
+    ymin = ax.get_ylim()[0]
+    ymax = ax.get_ylim()[1]
     # Adjust the ylim in order to fit in the line labels, probably far from the best way to do this...
     if eline_labels:
-        ax[0, 1].text(4341 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\gamma}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[0, 1].vlines(4341 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[0, 1].text(4102 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\delta}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[0, 1].vlines(4102 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[0, 1].text(3728 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[0, 1].vlines([3727 * (1 + zgal) * (1 + vel / c), 3729 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[0, 1].set_ylim(ymin, 1.2 * ymax)
+        ax.text(3728 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines([3727 * (1 + zgal) * (1 + vel / c), 3729 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.set_ylim(ymin, 1.2 * ymax)
+    ## Hgamma, Hdelta ##
+    ax = fig.add_subplot(grid[1, 1])
+    mask = np.greater(wave, 4080 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 4360 * (1 + zgal) * (1 + vel / c))
+    mask_model = np.greater(wave_model, 4080 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 4360 * (1 + zgal) * (1 + vel / c))
+    ax.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax.set_xlim(wave[mask].min(), wave[mask].max())
+    ymin = ax.get_ylim()[0]
+    ymax = ax.get_ylim()[1]
+    if eline_labels:
+        ax.text(4341 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\gamma}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines(4341 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.text(4102 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\delta}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines(4102 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.set_ylim(ymin, 1.2 * ymax)
     ## Hbeta, OIII ##
+    ax = fig.add_subplot(grid[2, 0])
     mask = np.greater(wave, 4840 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 5026 * (1 + zgal) * (1 + vel / c))
     mask_model = np.greater(wave_model, 4840 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 5026 * (1 + zgal) * (1 + vel / c))
-    ax[1, 0].plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
-    ax[1, 0].plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
-    ax[1, 0].set_xlim(wave[mask].min(), wave[mask].max())
-    ymin = ax[1, 0].get_ylim()[0]
-    ymax = ax[1, 0].get_ylim()[1]
+    ax.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax.set_xlim(wave[mask].min(), wave[mask].max())
+    ymin = ax.get_ylim()[0]
+    ymax = ax.get_ylim()[1]
     if eline_labels:
         # Adjust the ylim in order to fit in the line labels, probably far from the best way to do this...
-        ax[1, 0].text(4862 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\beta}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 0].vlines(4862 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[1, 0].text(5008 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oiii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 0].text(4960 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oiii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 0].vlines([4960 * (1 + zgal) * (1 + vel / c), 5008 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[1, 0].set_ylim(ymin, 1.2 * ymax)
+        ax.text(4862 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\beta}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines(4862 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.text(5008 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oiii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.text(4960 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Oiii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines([4960 * (1 + zgal) * (1 + vel / c), 5008 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.set_ylim(ymin, 1.2 * ymax)
     ## NII, Halpha, SII ##
+    ax = fig.add_subplot(grid[2, 1])
     mask = np.greater(wave, 6538 * (1 + zgal) * (1 + vel / c)) & np.less(wave, 6744 * (1 + zgal) * (1 + vel / c))
     mask_model = np.greater(wave_model, 6538 * (1 + zgal) * (1 + vel / c)) & np.less(wave_model, 6744 * (1 + zgal) * (1 + vel / c))
-    ax[1, 1].plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
-    ax[1, 1].plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
-    ax[1, 1].set_xlim(wave[mask].min(), wave[mask].max())
-    ymin = ax[1, 1].get_ylim()[0]
-    ymax = ax[1, 1].get_ylim()[1]
+    ax.plot(wave[mask], spec[mask], color = "k", lw = 1.0, drawstyle = "steps")
+    ax.plot(wave_model[mask_model], model_spec[mask_model], color = "C0", lw = 0.8, drawstyle = "steps")
+    ax.set_xlim(wave[mask].min(), wave[mask].max())
+    ymin = ax.get_ylim()[0]
+    ymax = ax.get_ylim()[1]
     if eline_labels:
         # Adjust the ylim in order to fit in the line labels, probably far from the best way to do this...
-        ax[1, 1].text(6564 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\alpha}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 1].vlines(6564 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[1, 1].text(6549 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Nii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 1].text(6585 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Nii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 1].vlines([6549 * (1 + zgal) * (1 + vel / c), 6585 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[1, 1].text(6718 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Sii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 1].text(6732 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Sii}$", fontsize = 8, ha = "center", va = "bottom")
-        ax[1, 1].vlines([6718 * (1 + zgal) * (1 + vel / c), 6732 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
-        ax[1, 1].set_ylim(ymin, 1.2 * ymax)
+        ax.text(6564 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\mathrm{H\alpha}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines(6564 * (1 + zgal) * (1 + vel / c), 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.text(6549 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Nii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.text(6585 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Nii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines([6549 * (1 + zgal) * (1 + vel / c), 6585 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.text(6718 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Sii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.text(6732 * (1 + zgal) * (1 + vel / c), 1.09 * ymax, r"$\textsc{Sii}$", fontsize = 8, ha = "center", va = "bottom")
+        ax.vlines([6718 * (1 + zgal) * (1 + vel / c), 6732 * (1 + zgal) * (1 + vel / c)], 1.0 * ymax, 1.08 * ymax, color = "k", lw = 0.75)
+        ax.set_ylim(ymin, 1.2 * ymax)
     # Figure labels
-    fig.supxlabel(r"Wavelength$\;\;\mathrm{[\AA]}$", fontsize = 10)
+    fig.supxlabel(r"Wavelength$\;\;\mathrm{[\AA]}$", fontsize = 10, y = 0.03)
     fig.supylabel(r"Flux density$\;\;\mathrm{[10^{-17}\;erg\,s^{1}\,cm^{-2}\,\AA^{-1}}]$", fontsize = 10, x = 0.07)
     # Save
     fig.savefig("/arc/projects/CLIFS/plots/specfits/specfit_clifs{}_{}_{}.pdf".format(galaxy.clifs_id, x, y), bbox_inches = "tight", pad_inches = 0.03)
+    fig.savefig("/arc/projects/CLIFS/plots/specfits/specfit_clifs{}_{}_{}.png".format(galaxy.clifs_id, x, y), bbox_inches = "tight", pad_inches = 0.03)
 
 def reproject_manga_map(data, snr, wcs, wcs_out, shape_out, method = "interp"):
     # Factor of 0.25 is to convert MaNGA maps from pixel^-1 to arcsec^-2
@@ -467,6 +485,7 @@ def weave_manga_line_fluxes(galaxy):
     fig.supxlabel(r"MaNGA:$\quad F_\lambda \;\; \mathrm{[erg\,s^{-1}\,cm^{-2}]}$", fontsize = 10, y = 0.04)
     fig.supylabel(r"WEAVE:$\quad F_\lambda \;\; \mathrm{[erg\,s^{-1}\,cm^{-2}]}$", fontsize = 10, x = 0.05)
     fig.savefig("/arc/projects/CLIFS/plots/manga_comparison/weave_manga_line_fluxes_clifs{}.pdf".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
+    fig.savefig("/arc/projects/CLIFS/plots/manga_comparison/weave_manga_line_fluxes_clifs{}.png".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
 
 def fiber_map(x0, y0, header):
     y_spacing = 3.4 / 3600 / header["PC2_2"]
@@ -536,7 +555,10 @@ def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
         ax.add_patch(patch)
         ax.coords["ra"].set_axislabel("RA")
         ax.coords["dec"].set_axislabel("Dec")
+        ax.coords["ra"].set_ticks_position("b")
+        ax.coords["dec"].set_ticks_position("l")
         fig.savefig("/arc/projects/CLIFS/plots/fiber_overlay/fiber_overlay_image_clifs{}.pdf".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
+        fig.savefig("/arc/projects/CLIFS/plots/fiber_overlay/fiber_overlay_image_clifs{}.png".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
     else:
         norm = ImageNormalize(img, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
         if xlim is not None:
@@ -553,21 +575,27 @@ def _plot_r90(galaxy, ax, wcs):
 def ha_tail_plot(galaxy):
     flux, wcs = galaxy.get_eline_map("Ha-6564", return_wcs = True)
     flux_sn = flux * np.sqrt(galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR"))
-    flux[flux_sn < 4] = np.nan
+    flux[flux_sn < 3] = np.nan
+    hba, hba_h = galaxy.get_cutout_image("lofar", "hba", header = True)
+    lev_hba = sigma_clipped_stats(hba)[2] * np.array([2.5])
     fig = plt.figure(figsize = (4.5, 4.5))
     ax = fig.add_subplot(1, 1, 1, projection = wcs)
     norm = ImageNormalize(flux, vmin = galaxy.config["plotting"]["tail"]["vmin"], vmax = galaxy.config["plotting"]["tail"]["vmax"], stretch = SqrtStretch())
     ax.imshow(flux, norm = norm, cmap = "viridis")
+    ax.contour(hba, levels = lev_hba, colors = "C1", transform = ax.get_transform(WCS(hba_h)))
     _plot_r90(galaxy, ax, wcs)
     ax.coords["ra"].set_axislabel("RA")
     ax.coords["dec"].set_axislabel("Dec")
+    ax.coords["ra"].set_ticks_position("b")
+    ax.coords["dec"].set_ticks_position("l")
     fig.savefig("/arc/projects/CLIFS/plots/ha_tail_plots/ha_tail_clifs{}.pdf".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
+    fig.savefig("/arc/projects/CLIFS/plots/ha_tail_plots/ha_tail_clifs{}.png".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
 
 def plots_for_clifspipe(galaxy):
     panel_image(galaxy.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}".format(galaxy.clifs_id), rgb = True, Nr = 1.5)
     specfit(galaxy)
     fiber_overlay_plot(galaxy, rgb = True)
-    if galaxy.manga:
-        weave_manga_line_fluxes(galaxy)
+    #if galaxy.manga:
+        #weave_manga_line_fluxes(galaxy)
     if galaxy.tail:
         ha_tail_plot(galaxy)

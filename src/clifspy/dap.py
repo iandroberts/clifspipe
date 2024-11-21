@@ -63,7 +63,6 @@ class WEAVEDataCube(DataCube):
             err = 1 / numpy.sqrt(ivar)
             mask = hdu["MASK"].data.astype(bool) | numpy.logical_not(err > 0.) | numpy.equal(ivar, 0.)
         print('Reading WEAVE datacube data ... DONE')
-
         # Resample to a geometric sampling
         # - Get the wavelength vector
         spatial_shape = flux.shape[1:][::-1]
@@ -78,7 +77,7 @@ class WEAVEDataCube(DataCube):
         #flux /= dw[:,None,None]
         # - Set the geometric step to the mean value.  This means some
         # pixels will be oversampled and others will be averaged.
-        dlogl = numpy.mean(numpy.diff(numpy.log10(wave)))  
+        dlogl = numpy.mean(numpy.diff(numpy.log10(wave)))
         # - Resample all the spectra.  Note that the Resample arguments
         # expect the input spectra to be provided in 2D arrays with the
         # last axis as the dispersion axis.
@@ -116,7 +115,6 @@ class WEAVEDataCube(DataCube):
         flux = r.outy.reshape(*spatial_shape,-1)
         flux[mask] = 0.0
         flux[~numpy.isfinite(flux)] = 0.0
-
         # Default name assumes file names like, e.g., '*_icubew.fits'
         super().__init__(flux, ivar=ivar, mask=mask, sres=_sres,
                          wave=r.outx, meta=meta, prihdr=head_new, wcs=wcs_new,
@@ -128,6 +126,7 @@ def _move_manga_dap_output_files(config, dap_dir_name = "HYB10-MILESHC-MASTARSSP
     os.rename(config["files"]["outdir_dap"] + "/{}/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name, dap_dir_name),
               config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name))
     shutil.rmtree(config["files"]["outdir_dap"] + "/" + dap_dir_name)
+    shutil.rmtree(config["files"]["outdir_dap"] + "/common")
 
     if decompress:
         subprocess.run(["gunzip", config["files"]["outdir_dap"] + "/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name)])

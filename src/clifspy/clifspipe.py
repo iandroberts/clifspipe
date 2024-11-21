@@ -1,3 +1,4 @@
+from clifspy.derived_products import products_for_clifspipe
 from clifspy.cube import generate_cube
 from clifspy.spectral_stacking import stack_spectrum_radial
 from clifspy.galaxy import galaxy
@@ -64,6 +65,11 @@ def run_clifs_pipeline(args, logger):
         run_manga_dap(this_galaxy, decompress = True)
         logger.info("Done MANGA DAP")
 
+    if args.products:
+        logger.info("STARTING DERIVED PRODUCTS")
+        products_for_clifspipe(this_galaxy)
+        logger.info("DONE DERVIVED PRODUCTS")
+
     if args.make_plots:
         logger.info("Making plots...")
         plots_for_clifspipe(this_galaxy)
@@ -76,6 +82,7 @@ def main():
     parser.add_argument("--process_cube", action = "store_true")
     parser.add_argument("--multiwav", action = "store_true")
     parser.add_argument("--manga_dap", action = "store_true")
+    parser.add_argument("--products", action = "store_true")
     parser.add_argument("--make_plots", action = "store_true")
     parser.add_argument("--xmin", type = int, default = -99)
     parser.add_argument("--xmax", type = int, default = -99)
