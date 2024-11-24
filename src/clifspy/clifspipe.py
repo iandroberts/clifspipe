@@ -1,11 +1,5 @@
-from clifspy.derived_products import products_for_clifspipe
-from clifspy.cube import generate_cube
-from clifspy.spectral_stacking import stack_spectrum_radial
-from clifspy.galaxy import galaxy
-from clifspy.dap import run_manga_dap
-from clifspy.utils import make_config_file
-from clifspy.multiwav import make_multiwav_cutouts
-from clifspy.plotting import plots_for_clifspipe
+from clifspy import (derived_products, cube, galaxy, dap, utils,
+                        multiwav, plotting)
 import warnings
 import os.path
 import logging
@@ -41,18 +35,18 @@ def setup_logger(gal_id):
 def run_clifs_pipeline(args, logger):
     if not os.path.isfile("/arc/projects/CLIFS/config_files/clifs_{}.toml".format(args.clifs_id)):
         logger.info("Galaxy config file does not exist, generating it now")
-        make_config_file(args)
-    this_galaxy = galaxy(args.clifs_id)
+        utils.make_config_file(args)
+    this_galaxy = galaxy.Galaxy(args.clifs_id)
 
     if args.process_cube:
         logger.info("STARTING PROCESS CUBE...")
-        generate_cube(this_galaxy)
-        generate_cube(this_galaxy, fullfield = True)
+        cube.generate_cube(this_galaxy)
+        cube.generate_cube(this_galaxy, fullfield = True)
         logger.info("DONE PROCESS CUBE")
 
     if args.multiwav:
         logger.info("STARTING MULTIWAVELENGTH PRODUCTS")
-        make_multiwav_cutouts(this_galaxy)
+        multiwav.make_multiwav_cutouts(this_galaxy)
         logger.info("DONE MULTIWAVELENGTH PRODUCTS")
 
     #if "RADSTACK" in steps:
@@ -62,17 +56,17 @@ def run_clifs_pipeline(args, logger):
 
     if args.manga_dap:
         logger.info("Starting MANGA DAP...")
-        run_manga_dap(this_galaxy, decompress = True)
+        dap.run_manga_dap(this_galaxy, decompress = True)
         logger.info("Done MANGA DAP")
 
     if args.products:
         logger.info("STARTING DERIVED PRODUCTS")
-        products_for_clifspipe(this_galaxy)
+        derived_products.products_for_clifspipe(this_galaxy)
         logger.info("DONE DERVIVED PRODUCTS")
 
     if args.make_plots:
         logger.info("Making plots...")
-        plots_for_clifspipe(this_galaxy)
+        plotting.plots_for_clifspipe(this_galaxy)
         logger.info("Done plotting")
 
 def main():
