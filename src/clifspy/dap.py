@@ -1,57 +1,40 @@
-from pathlib import Path
-import numpy
+import logging
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy import units
 from mangadap.datacube.datacube import DataCube
 from mangadap.util.sampling import Resample, angstroms_per_pixel
-import sys
 import matplotlib.pyplot as plt
-import astropy.units as u
+import numpy as np
 import toml
-import re
-import subprocess
-import os
-import shutil
-import logging
+
+import clifspy.utils
 
 logger = logging.getLogger("CLIFS_Pipeline")
 
 class WEAVEDataCube(DataCube):
-    r"""
-    Container class for WEAVE datacubes.
-
-    Args:
-        ifile (:obj:`str`):
-            The name of the file to read.
-    """
-
     instrument = 'weave'
-    """
-    Set the name of the instrument.  This is used to construct the
-    output file names.
-    """
-
     def __init__(self, ifile):
-
-        _ifile = Path(ifile).resolve()
-        # Extract CLIFS/NGC ID from cube file path. This is a bit hacky and relies on
-        # the CLIFS/NGC ID being the only int in the path.  Probably a better way...
+        _ifile = pathlibPath(ifile).resolve()
         find_ints = re.findall(r'\d+', ifile)
-        assert len(find_ints) == 1 # Assert that only one int is found
+        if len(find_ints) > 1: raise ValueError("More than one ID found")
         config_path = "/arc/projects/CLIFS/config_files/clifs_{}.toml".format(find_ints[0])
-
         if not _ifile.exists():
             raise FileNotFoundError(f'File does not exist: {_ifile}')
-
         # Set the paths
         self.directory_path = _ifile.parent
         self.file_name = _ifile.name
-
         # Collect the metadata into a dictionary
         config = toml.load(config_path)
         meta = config["galaxy"]
         sres = 2500
-
         # Open the file and initialize the DataCube base class
         with fits.open(str(_ifile)) as hdu:
             print('Reading WEAVE datacube data ...', end='\r')
@@ -60,24 +43,19 @@ class WEAVEDataCube(DataCube):
             wcs = WCS(header=hdr, fix=True)
             flux = hdu["FLUX"].data
             ivar = hdu["IVAR"].data
-            err = 1 / numpy.sqrt(ivar)
-            mask = hdu["MASK"].data.astype(bool) | numpy.logical_not(err > 0.) | numpy.equal(ivar, 0.)
+            err = 1 / np.sqrt(ivar)
+            mask = hdu["MASK"].data.astype(bool) | np.logical_not(err > 0.) | np.equal(ivar, 0.)
         print('Reading WEAVE datacube data ... DONE')
         # Resample to a geometric sampling
         # - Get the wavelength vector
         spatial_shape = flux.shape[1:][::-1]
-        nwave = flux.shape[0]
-        coo = numpy.array([numpy.ones(nwave), numpy.ones(nwave), numpy.arange(nwave)+1]).T
-        wave = (wcs.all_pix2world(coo, 1)[:,2]*wcs.wcs.cunit[2].to('angstrom')) * u.AA
+        wave = clifspy.utils.wave_axis_from_wcs(wcs, data.shape[0])
         # - Convert wavelengths to vacuum
-        wlum = wave.to(u.um).value
-        wave = ((1+1e-6*(287.6155+1.62887/wlum**2+0.01360/wlum**4)) * wave).to(u.AA).value
-        # - Convert the fluxes to flux density
-        #dw = angstroms_per_pixel(wave, regular=False)
-        #flux /= dw[:,None,None]
+        wlum = wave.to(units.um).value
+        wave = ((1+1e-6*(287.6155+1.62887/wlum**2+0.01360/wlum**4)) * wave).to(units.AA).value
         # - Set the geometric step to the mean value.  This means some
         # pixels will be oversampled and others will be averaged.
-        dlogl = numpy.mean(numpy.diff(numpy.log10(wave)))
+        dlogl = np.mean(np.diff(np.log10(wave)))
         # - Resample all the spectra.  Note that the Resample arguments
         # expect the input spectra to be provided in 2D arrays with the
         # last axis as the dispersion axis.
@@ -86,7 +64,6 @@ class WEAVEDataCube(DataCube):
                      newLog=True, newdx=dlogl)
         # - Reshape and reformat the resampled data in prep for
         # instantiation
-
         head_new = wcs.to_header()
         head_new["NAXIS"] = (3, "Number of array dimensions")
         head_new["NAXIS1"] = flux.shape[2]
@@ -94,7 +71,7 @@ class WEAVEDataCube(DataCube):
         head_new["NAXIS3"] = flux.shape[0]
         head_new["PC1_1"] = (head_new["CDELT1"], "Coordinate transformation matrix element")
         head_new["PC2_2"] = (head_new["CDELT2"], "Coordinate transformation matrix element")
-        head_new["PC3_3"] = (r.outx[0] * dlogl * numpy.log(10) * 1e-10, "Coordinate transformation matrix element")
+        head_new["PC3_3"] = (r.outx[0] * dlogl * np.log(10) * 1e-10, "Coordinate transformation matrix element")
         head_new["CDELT1"] = (1., "[deg] Coordinate increment at reference point")
         head_new["CDELT2"] = (1., "[deg] Coordinate increment at reference point")
         head_new["CDELT3"] = (1., "[m] Coordinate increment at reference point")
@@ -104,17 +81,16 @@ class WEAVEDataCube(DataCube):
         head_new["CRPIX2"] = (hdr["CRPIX2"], "Pixel coordinate of reference point")
         head_new["CRPIX3"] = (1.0, "Pixel coordinate of reference point")
         wcs_new = WCS(head_new)
-
-        ivar = r.oute.reshape(*spatial_shape,-1)
-        mask = r.outf.reshape(*spatial_shape,-1) < 0.8
+        ivar = r.oute.reshape(*spatial_shape, -1)
+        mask = r.outf.reshape(*spatial_shape, -1) < 0.8
         ivar[mask] = 0.0
-        gpm = numpy.logical_not(mask)
-        ivar[gpm] = 1/ivar[gpm]**2
-        ivar[~numpy.isfinite(ivar)] = 0.0
-        _sres = numpy.full(ivar.shape, sres, dtype=float)
-        flux = r.outy.reshape(*spatial_shape,-1)
+        gpm = np.logical_not(mask)
+        ivar[gpm] = 1 / ivar[gpm]**2
+        ivar[~np.isfinite(ivar)] = 0.0
+        _sres = np.full(ivar.shape, sres, dtype=float)
+        flux = r.outy.reshape(*spatial_shape, -1)
         flux[mask] = 0.0
-        flux[~numpy.isfinite(flux)] = 0.0
+        flux[~np.isfinite(flux)] = 0.0
         # Default name assumes file names like, e.g., '*_icubew.fits'
         super().__init__(flux, ivar=ivar, mask=mask, sres=_sres,
                          wave=r.outx, meta=meta, prihdr=head_new, wcs=wcs_new,
@@ -127,10 +103,9 @@ def _move_manga_dap_output_files(config, dap_dir_name = "HYB10-MILESHC-MASTARSSP
               config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name))
     shutil.rmtree(config["files"]["outdir_dap"] + "/" + dap_dir_name)
     shutil.rmtree(config["files"]["outdir_dap"] + "/common")
-
     if decompress:
-        subprocess.run(["gunzip", config["files"]["outdir_dap"] + "/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name)])
-        subprocess.run(["gunzip", config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name)])
+        subprocess.run(["gunzip",  "-f", config["files"]["outdir_dap"] + "/weave-calibrated-LOGCUBE-{}.fits.gz".format(dap_dir_name)])
+        subprocess.run(["gunzip", "-f", config["files"]["outdir_dap"] + "/weave-calibrated-MAPS-{}.fits.gz".format(dap_dir_name)])
 
 def run_manga_dap(galaxy, decompress = False):
     cube_path = galaxy.config["files"]["cube_sci"]

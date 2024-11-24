@@ -1,19 +1,25 @@
-import numpy as np
 import argparse
-from astropy.table import Table
 import glob
-import re
-from astropy.coordinates import SkyCoord
-import astropy.units as u
 import logging
-from astropy.nddata import Cutout2D
+import re
+
+from astropy import coordinates
+from astropy.table import Table
+from astropy import nddata
+from astropy import units
+import numpy as np
 
 logger = logging.getLogger("CLIFS_Pipeline")
 
-def match_to_galaxy(tcat, tgal, max_sep_arcsec = 1.0):
-    c_cat = SkyCoord(tcat["RA"], tcat["DEC"], unit = "deg")
-    c_gal = SkyCoord(tgal["ra"], tgal["decl"], unit = "deg")
-    max_sep = max_sep_arcsec * u.arcsec
+def wave_axis_from_wcs(wcs, nwave):
+    coo = np.array([np.ones(nwave), np.ones(nwave), np.arange(nwave) + 1]).T
+    wave = wcs.all_pix2world(coo, 1)[:, 2] * wcs.wcs.cunit[2].to('angstrom')
+    return wave
+
+def match_to_galaxy(tcat, tgal, max_sep_arcsec=1.0):
+    c_cat = coordinates.SkyCoord(tcat["RA"], tcat["DEC"], unit="deg")
+    c_gal = coordinates.SkyCoord(tgal["ra"], tgal["decl"], unit="deg")
+    max_sep = max_sep_arcsec * units.arcsec
     idx, d2d, d3d = c_gal.match_to_catalog_3d(c_cat)
     if d2d[0] < max_sep:
         pa = tcat["ELPETRO_PHI"][idx[0]]
@@ -26,101 +32,101 @@ def match_to_galaxy(tcat, tgal, max_sep_arcsec = 1.0):
         return -99, -99, -99, -99
 
 def _populate_galaxy(args, file, tclifs):
-    print('[galaxy]', file = file)
-    print('name = "{}"'.format(tclifs["name"][0]), file = file)
-    print('clifs_id = {}'.format(args.clifs_id), file = file)
-    print('ra = {:.6e}'.format(tclifs["ra"][0]), file = file)
-    print('dec = {:.5e}'.format(tclifs["decl"][0]), file = file)
-    print('z = {:.5f}'.format(tclifs["redshift"][0]), file = file)
+    print('[galaxy]', file=file)
+    print('name = "{}"'.format(tclifs["name"][0]), file=file)
+    print('clifs_id = {}'.format(args.clifs_id), file=file)
+    print('ra = {:.6e}'.format(tclifs["ra"][0]), file=file)
+    print('dec = {:.5e}'.format(tclifs["decl"][0]), file=file)
+    print('z = {:.5f}'.format(tclifs["redshift"][0]), file=file)
     tnsa = Table.read("/arc/projects/CLIFS/catalogs/nsa_v1_0_1_shrunk.fits")
     pa, ellip, r50, r90 = match_to_galaxy(tnsa, tclifs)
-    print('ell = {:.3f}'.format(ellip), file = file)
-    print('reff = {:.3e}'.format(r50), file = file)
-    print('pa = {:.3e}'.format(pa), file = file)
-    print('r90 = {:.3e}'.format(r90), file = file)
-    print("", file = file)
+    print('ell = {:.3f}'.format(ellip), file=file)
+    print('reff = {:.3e}'.format(r50), file=file)
+    print('pa = {:.3e}'.format(pa), file=file)
+    print('r90 = {:.3e}'.format(r90), file=file)
+    print("", file=file)
 
 def _populate_data_coverage(args, file, tclifs):
-    print('[data_coverage]', file = file)
+    print('[data_coverage]', file=file)
     if tclifs["manga_obs"]:
-        print('manga = true', file = file)
+        print('manga = true', file=file)
     else:
-        print('manga = false', file = file)
+        print('manga = false', file=file)
     if tclifs["weave_obs"]:
-        print('weave = true', file = file)
+        print('weave = true', file=file)
     else:
-        print('weave = false', file = file)
+        print('weave = false', file=file)
     if "ACA" in tclifs["CO_flag"]:
-        print('aca = true', file = file)
+        print('aca = true', file=file)
     else:
-        print('aca = false', file = file)
+        print('aca = false', file=file)
     if "IRAM" in tclifs["CO_flag"]:
-        print('iram = true', file = file)
+        print('iram = true', file=file)
     else:
-        print('iram = false', file = file)
-    print("", file = file)
+        print('iram = false', file=file)
+    print("", file=file)
 
 def _populate_cube(args, file):
-    print('[cube]', file = file)
-    print('xmin = {}'.format(args.xmin), file = file)
-    print('xmax = {}'.format(args.xmax), file = file)
-    print('ymin = {}'.format(args.ymin), file = file)
-    print('ymax = {}'.format(args.ymax), file = file)
-    print("", file = file)
+    print('[cube]', file=file)
+    print('xmin = {}'.format(args.xmin), file=file)
+    print('xmax = {}'.format(args.xmax), file=file)
+    print('ymin = {}'.format(args.ymin), file=file)
+    print('ymax = {}'.format(args.ymax), file=file)
+    print("", file=file)
 
 def _populate_files(args, file):
-    print('[files]', file = file)
+    print('[files]', file=file)
     paths = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/stackcube_???????.fit".format(args.clifs_id))
     if len(paths) == 2:
         numbers = [re.findall(r"\d+", paths[0]), re.findall(r"\d+", paths[1])]
         if int(numbers[0][1]) > int(numbers[1][1]):
-            print('cube_blue = "{}"'.format(paths[0]), file = file)
-            print('cube_red = "{}"'.format(paths[1]), file = file)
+            print('cube_blue = "{}"'.format(paths[0]), file=file)
+            print('cube_red = "{}"'.format(paths[1]), file=file)
         else:
-            print('cube_blue = "{}"'.format(paths[1]), file = file)
-            print('cube_red = "{}"'.format(paths[0]), file = file)
-        print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file = file)
-        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file = file)
-        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file = file)
+            print('cube_blue = "{}"'.format(paths[1]), file=file)
+            print('cube_red = "{}"'.format(paths[0]), file=file)
+        print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file=file)
+        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file=file)
+        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file=file)
     elif len(paths) == 0:
         logger.info("No 'stackcube' files found")
-        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file = file)
-        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file = file)
-        print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file = file)
+        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file=file)
+        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file=file)
+        print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file=file)
     else:
         raise Exception("Strange number of matches from file search")
-    print("", file = file)
+    print("", file=file)
 
 def _populate_pipeline(args, file):
-    print('[pipeline]', file = file)
-    print('bkgsub = {}'.format(args.bkgsub), file = file)
-    print('bkgsub_galmask = {}'.format(args.bkgsub_galmask), file = file)
-    print('downsample_spatial = {}'.format(args.downsample_spatial), file = file)
-    print('alpha = {}'.format(args.alpha), file = file)
-    print('factor_spatial = {}'.format(args.factor_spatial), file = file)
-    print('downsample_wav = {}'.format(args.downsample_wav), file = file)
-    print('fill_ccd_gaps = {}'.format(args.fill_ccd_gaps), file = file)
-    print('fix_astrometry = {}'.format(args.fix_astrometry), file = file)
-    print('hdf5 = {}'.format(args.hdf5), file = file)
-    print('verbose = {}'.format(args.verbose), file = file)
-    print('clobber = {}'.format(args.clobber), file = file)
-    print("", file = file)
+    print('[pipeline]', file=file)
+    print('bkgsub = {}'.format(args.bkgsub), file=file)
+    print('bkgsub_galmask = {}'.format(args.bkgsub_galmask), file=file)
+    print('downsample_spatial = {}'.format(args.downsample_spatial), file=file)
+    print('alpha = {}'.format(args.alpha), file=file)
+    print('factor_spatial = {}'.format(args.factor_spatial), file=file)
+    print('downsample_wav = {}'.format(args.downsample_wav), file=file)
+    print('fill_ccd_gaps = {}'.format(args.fill_ccd_gaps), file=file)
+    print('fix_astrometry = {}'.format(args.fix_astrometry), file=file)
+    print('hdf5 = {}'.format(args.hdf5), file=file)
+    print('verbose = {}'.format(args.verbose), file=file)
+    print('clobber = {}'.format(args.clobber), file=file)
+    print("", file=file)
 
 def _populate_plotting(file):
-    print('[plotting]', file = file)
-    print('sn_min = [1, 2]', file = file)
-    print('sn_max = [32, 30]', file = file)
-    print('v_star_min = [-100, -75]', file = file)
-    print('v_star_max = [100, 75]', file = file)
-    print('vdisp_star_min = [0, 10]', file = file)
-    print('vdisp_star_max = [100, 90]', file = file)
-    print('dn4000_min = [1.0, 1.1]', file = file)
-    print('dn4000_max = [2.0, 1.9]', file = file)
-    print('flux_ha_min = [0, 5]', file = file)
-    print('flux_ha_max = [50, 45]', file = file)
-    print('v_ha_min = [-100, -75]', file = file)
-    print('v_ha_max = [100, 75]', file = file)
-    print('eline_labels = true', file = file)
+    print('[plotting]', file=file)
+    print('sn_min = [1, 2]', file=file)
+    print('sn_max = [32, 30]', file=file)
+    print('v_star_min = [-100, -75]', file=file)
+    print('v_star_max = [100, 75]', file=file)
+    print('vdisp_star_min = [0, 10]', file=file)
+    print('vdisp_star_max = [100, 90]', file=file)
+    print('dn4000_min = [1.0, 1.1]', file=file)
+    print('dn4000_max = [2.0, 1.9]', file=file)
+    print('flux_ha_min = [0, 5]', file=file)
+    print('flux_ha_max = [50, 45]', file=file)
+    print('v_ha_min = [-100, -75]', file=file)
+    print('v_ha_max = [100, 75]', file=file)
+    print('eline_labels = true', file=file)
 
 def make_config_file(args):
     clifstab = Table.read("/arc/projects/CLIFS/catalogs/clifs_master_catalog.fits")
@@ -134,7 +140,7 @@ def make_config_file(args):
     _populate_plotting(file)
 
 def sky_cutout_from_image(img, coord, size, wcs):
-    cut = Cutout2D(img, coord, size, wcs = wcs)
+    cut = nddata.Cutout2D(img, coord, size, wcs = wcs)
     return cut.data, cut.wcs.to_header()
 
 def eline_lookup(line):
@@ -213,7 +219,7 @@ def eline_lookup(line):
     else:
         raise ValueError("Invalid line name, see: https://sdss-mangadap.readthedocs.io/en/latest/datamodel.html")
 
-def eline_mask(wave, z, medium = "air", dv = 500, bright_only = False):
+def eline_mask(wave, z, medium="air", dv=500, bright_only=False):
     if medium == "air":
         rest_wav = np.array([3726.032, 3728.815, 3750.158, 3770.637, 3797.904, 3835.391, 3868.760, 3888.647, 3889.064, 3967.470,
                              3970.079, 4101.742, 4340.471, 4685.710, 4861.333, 4958.911, 5006.843, 5197.902, 5200.257, 5875.624,
