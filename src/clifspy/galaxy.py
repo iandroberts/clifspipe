@@ -26,6 +26,7 @@ class Galaxy:
         self.pa = self.config["galaxy"]["pa"] * u.deg
         self.r90 = self.config["galaxy"]["r90"] * u.arcsec
         self.manga = self.config["data_coverage"]["manga"]
+        self.weave = self.config["data_coverage"]["weave"]
         self.ra_pnt = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["ra_lifu"])
         self.dec_pnt = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["dec_lifu"])
         self.tail = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["tail_pa"]) >= 0.0

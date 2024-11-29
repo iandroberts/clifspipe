@@ -542,7 +542,10 @@ def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
     cd = img_h["PC2_2"]
     fig = plt.figure(figsize = (4.5, 4.5))
     ax = fig.add_subplot(1, 1, 1, projection = WCS(img_h).celestial)
-    coord_pnt = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, unit = "deg")
+    if galaxy.ra_pnt == -99:
+        coord_pnt = SkyCoord(galaxy.ra, galaxy.dec, unit = "deg")
+    else:
+        coord_pnt = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, units = "deg")
     x_pnt, y_pnt = WCS(img_h).celestial.world_to_pixel(coord_pnt)
     xlim = [int(x_pnt - 0.75 / 60 / cd), int(x_pnt + 0.75 / 60 / cd)]
     ylim = [int(y_pnt - 0.75 / 60 / cd), int(y_pnt + 0.75 / 60 / cd)]
@@ -565,8 +568,9 @@ def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
         if galaxy.manga:
             patch = MaNGA_boundary(galaxy)
             ax.add_patch(patch)
-        patch = LIFU_boundary(galaxy)
-        ax.add_patch(patch)
+        if galaxy.weave:
+            patch = LIFU_boundary(galaxy)
+            ax.add_patch(patch)
         ax.coords["ra"].set_axislabel("RA")
         ax.coords["dec"].set_axislabel("Dec")
         ax.coords["ra"].set_ticks_position("b")
