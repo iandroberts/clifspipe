@@ -9,9 +9,10 @@ import toml
 from clifspy.utils import eline_lookup
 from astropy.table import Table
 
-class galaxy:
+class Galaxy:
     def __init__(self, clifs_id):
         clifs_cat = Table.read("/arc/projects/CLIFS/catalogs/clifs_master_catalog.fits")
+        manga_cat = Table.read("/arc/projects/CLIFS/catalogs/drpall-v3_1_1.fits")
         config_path = f"/arc/projects/CLIFS/config_files/clifs_{clifs_id}.toml"
         self.config = toml.load(config_path)
         self.name = self.config["galaxy"]["name"]
@@ -28,7 +29,10 @@ class galaxy:
         self.ra_pnt = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["ra_lifu"])
         self.dec_pnt = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["dec_lifu"])
         self.tail = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["tail_pa"]) >= 0.0
-
+        if self.manga:
+            self.plateifu = clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["plateifu"][0]
+            print(self.plateifu)
+            self.manga_Nfib = int(manga_cat[manga_cat["plateifu"] == self.plateifu]["ifudesignsize"])
     def get_cutout_image(self, telescope, filter, header = False):
         img_path = "/arc/projects/CLIFS/multiwav/cutouts/clifs{}/{}-{}.fits".format(self.clifs_id, telescope, filter)
         return fits.getdata(img_path, header = header)

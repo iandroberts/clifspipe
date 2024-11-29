@@ -7,7 +7,7 @@ from reproject import reproject_exact, reproject_interp
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
-from clifspy.galaxy import galaxy
+from clifspy.galaxy import Galaxy
 from astropy.wcs import WCS
 import matplotlib.gridspec as gs
 from astropy.visualization import (AsymmetricPercentileInterval, PercentileInterval, SqrtStretch,
@@ -18,7 +18,7 @@ plt.rcParams["font.family"] = "STIXGeneral"
 
 class panel_image:
     def __init__(self, clifs_id, panels = ["snr", "v_star", "vdisp_star", "flux_ha", "v_ha", "dn4000"], figsize = (9.0, 2.9)):
-        self.galaxy = galaxy(clifs_id)
+        self.galaxy = Galaxy(clifs_id)
         self.fig = plt.Figure(figsize = figsize)
         self.axis_grid = gs.GridSpec(2, 5)
         self.axis_grid.update(wspace = 0.05, hspace = 0.1)
@@ -61,20 +61,23 @@ class panel_image:
         if grid:
             overlay.grid(color = "k", alpha = 0.1, lw = 0.5)
 
-    def optical(self, gax, rgb = False, xlim = None, ylim = None, Nr = 2):
+    def optical(self, gax, rgb = False, xlim = None, ylim = None):
         img, img_h = self.galaxy.get_cutout_image("cfht", "G", header = True)
         x0, y0 = WCS(img_h).celestial.world_to_pixel(self.galaxy.c)
         cd = img_h["PC2_2"]
         r90 = self.galaxy.config["galaxy"]["r90"]
+        Nr = self.galaxy.config["plotting"]["panel"]["Nr90"]
         xlim = [int(x0 - Nr * (r90 / 3600 / cd)), int(x0 + Nr * (r90 / 3600 / cd))]
         ylim = [int(y0 - Nr * (r90 / 3600 / cd)), int(y0 + Nr * (r90 / 3600 / cd))]
         if rgb:
             imgU, imgU_h = self.galaxy.get_cutout_image("cfht", "U", header = True)
             imgI, imgI_h = self.galaxy.get_cutout_image("cfht", "I2", header = True)
-            normU = ImageNormalize(imgU, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
-            normG = ImageNormalize(img, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
-            normI = ImageNormalize(imgI, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
+            normU = ImageNormalize(imgU, interval = PercentileInterval(self.galaxy.config["plotting"]["fov"]["b_pct"]), stretch = AsinhStretch(a = 0.05))
+            normG = ImageNormalize(img, interval = PercentileInterval(self.galaxy.config["plotting"]["fov"]["g_pct"]), stretch = AsinhStretch(a = 0.05))
+            normI = ImageNormalize(imgI, interval = PercentileInterval(self.galaxy.config["plotting"]["fov"]["r_pct"]), stretch = AsinhStretch(a = 0.05))
             rgb_array = np.array([normI(imgI), normG(img), normU(imgU)])
+            print(np.max(rgb_array))
+            print(np.min(rgb_array))
             ax = self.fig.add_subplot(gax, projection = WCS(img_h).celestial)
             if xlim is not None:
                 ax.set_xlim(xlim)
@@ -265,13 +268,14 @@ class panel_image:
         self._offset_axis(ax, labels = False, grid = True)
         ax.set_facecolor("#dddddd")
 
-    def make(self, filepath, rgb = False, Nr = 2, png = False):
+    def make(self, filepath, rgb = False):
         if len(self.panels) != 6:
             raise IndexError("List of panels should have precisely six elements")
-        self.optical(self.axis_grid[0:2, 0:2], rgb = rgb, Nr = Nr)
+        self.optical(self.axis_grid[0:2, 0:2], rgb = rgb)
         x0, y0 = WCS(self.maps[0].header).celestial.world_to_pixel(self.galaxy.c)
         cd = self.maps[0].header["PC2_2"]
         r90 = self.galaxy.config["galaxy"]["r90"]
+        Nr = self.galaxy.config["plotting"]["panel"]["Nr90"]
         xlim = [int(x0 - Nr * (r90 / 3600 / cd)), int(x0 + Nr * (r90 / 3600 / cd))]
         ylim = [int(y0 - Nr * (r90 / 3600 / cd)), int(y0 + Nr * (r90 / 3600 / cd))]
         for i in range(len(self.panels)):
@@ -523,6 +527,15 @@ def LIFU_boundary(galaxy):
     patch = RegularPolygon((x_pnt, y_pnt), numVertices = 6, radius = 45 / 3600 / cd, ec = "w", fc = "none")
     return patch
 
+def MaNGA_boundary(galaxy):
+    img, img_h = galaxy.get_cutout_image("cfht", "G", header = True)
+    cd = img_h["PC2_2"]
+    coord_pnt = SkyCoord(galaxy.ra, galaxy.dec, unit = "deg")
+    x_pnt, y_pnt = WCS(img_h).celestial.world_to_pixel(coord_pnt)
+    rad_as = np.sqrt(galaxy.manga_Nfib) / 2 / 0.355
+    patch = RegularPolygon((x_pnt, y_pnt), numVertices=6, radius=rad_as/3600/cd, ec="w", fc="none", ls="--", orientation=np.pi/2)
+    return patch
+
 def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
     img, img_h = galaxy.get_cutout_image("cfht", "G", header = True)
     x0, y0 = WCS(img_h).celestial.world_to_pixel(galaxy.c)
@@ -536,21 +549,22 @@ def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
     if rgb:
         imgU, imgU_h = galaxy.get_cutout_image("cfht", "U", header = True)
         imgI, imgI_h = galaxy.get_cutout_image("cfht", "I2", header = True)
-        normU = ImageNormalize(imgU, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
-        normG = ImageNormalize(img, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
-        normI = ImageNormalize(imgI, interval = PercentileInterval(99.7), stretch = AsinhStretch(a = 0.05))
+        normU = ImageNormalize(imgU, interval = PercentileInterval(galaxy.config["plotting"]["fov"]["b_pct"]), stretch = AsinhStretch(a = 0.05))
+        normG = ImageNormalize(img, interval = PercentileInterval(galaxy.config["plotting"]["fov"]["g_pct"]), stretch = AsinhStretch(a = 0.05))
+        normI = ImageNormalize(imgI, interval = PercentileInterval(galaxy.config["plotting"]["fov"]["r_pct"]), stretch = AsinhStretch(a = 0.05))
         rgb_array = np.array([normI(imgI), normG(img), normU(imgU)])
         if xlim is not None:
             ax.set_xlim(xlim)
         if ylim is not None:
             ax.set_ylim(ylim)
         ax.imshow(np.moveaxis(rgb_array, 0, -1))
-        #fiber_patches = fiber_map(x_pnt, y_pnt, img_h)
-        #collection = PatchCollection(fiber_patches)
-        #collection.set_edgecolor("w")
-        #collection.set_facecolor("none")
-        #collection.set_linewidth(0.5)
-        #collection.set_alpha(0.25)
+        if galaxy.tail:
+            hba, hba_h = galaxy.get_cutout_image("lofar", "hba", header = True)
+            lev_hba = sigma_clipped_stats(hba)[2] * np.array([2.5])
+            ax.contour(hba, levels = lev_hba, linewidths = 0.75, colors = "w", alpha = 0.8, transform = ax.get_transform(WCS(hba_h)))
+        if galaxy.manga:
+            patch = MaNGA_boundary(galaxy)
+            ax.add_patch(patch)
         patch = LIFU_boundary(galaxy)
         ax.add_patch(patch)
         ax.coords["ra"].set_axislabel("RA")
@@ -592,8 +606,8 @@ def ha_tail_plot(galaxy):
     fig.savefig("/arc/projects/CLIFS/plots/ha_tail_plots/ha_tail_clifs{}.png".format(galaxy.clifs_id), bbox_inches = "tight", pad_inches = 0.03)
 
 def plots_for_clifspipe(galaxy):
-    panel_image(galaxy.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}".format(galaxy.clifs_id), rgb = True, Nr = 1.5)
-    specfit(galaxy)
+    #panel_image(galaxy.clifs_id).make("/arc/projects/CLIFS/plots/panel_images/panel_img_clifs{}".format(galaxy.clifs_id), rgb = True)
+    #specfit(galaxy)
     fiber_overlay_plot(galaxy, rgb = True)
     #if galaxy.manga:
         #weave_manga_line_fluxes(galaxy)

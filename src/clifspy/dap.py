@@ -22,7 +22,7 @@ logger = logging.getLogger("CLIFS_Pipeline")
 class WEAVEDataCube(DataCube):
     instrument = 'weave'
     def __init__(self, ifile):
-        _ifile = pathlibPath(ifile).resolve()
+        _ifile = pathlib.Path(ifile).resolve()
         find_ints = re.findall(r'\d+', ifile)
         if len(find_ints) > 1: raise ValueError("More than one ID found")
         config_path = "/arc/projects/CLIFS/config_files/clifs_{}.toml".format(find_ints[0])
@@ -49,7 +49,7 @@ class WEAVEDataCube(DataCube):
         # Resample to a geometric sampling
         # - Get the wavelength vector
         spatial_shape = flux.shape[1:][::-1]
-        wave = clifspy.utils.wave_axis_from_wcs(wcs, data.shape[0])
+        wave = clifspy.utils.wave_axis_from_wcs(wcs, flux.shape[0]) * units.AA
         # - Convert wavelengths to vacuum
         wlum = wave.to(units.um).value
         wave = ((1+1e-6*(287.6155+1.62887/wlum**2+0.01360/wlum**4)) * wave).to(units.AA).value
@@ -59,8 +59,8 @@ class WEAVEDataCube(DataCube):
         # - Resample all the spectra.  Note that the Resample arguments
         # expect the input spectra to be provided in 2D arrays with the
         # last axis as the dispersion axis.
-        r = Resample(flux.T.reshape(-1,nwave), e=err.T.reshape(-1,nwave),
-                     mask=mask.T.reshape(-1,nwave), x=wave, inLog=False, newRange=wave[[0,-1]],
+        r = Resample(flux.T.reshape(-1, flux.shape[0]), e=err.T.reshape(-1,flux.shape[0]),
+                     mask=mask.T.reshape(-1,flux.shape[0]), x=wave, inLog=False, newRange=wave[[0,-1]],
                      newLog=True, newdx=dlogl)
         # - Reshape and reformat the resampled data in prep for
         # instantiation

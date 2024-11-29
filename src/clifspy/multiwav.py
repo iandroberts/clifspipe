@@ -1,5 +1,5 @@
 from astropy.coordinates import SkyCoord
-from clifspy.galaxy import galaxy
+from clifspy.galaxy import Galaxy
 import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
