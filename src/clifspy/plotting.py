@@ -540,12 +540,12 @@ def fiber_overlay_plot(galaxy, rgb = False, xlim = None, ylim = None, Nr = 2):
     img, img_h = galaxy.get_cutout_image("cfht", "G", header = True)
     x0, y0 = WCS(img_h).celestial.world_to_pixel(galaxy.c)
     cd = img_h["PC2_2"]
-    fig = plt.figure(figsize = (4.5, 4.5))
+    fig = plt.figure(figsize = (3.0, 3.0))
     ax = fig.add_subplot(1, 1, 1, projection = WCS(img_h).celestial)
     if galaxy.ra_pnt == -99:
         coord_pnt = SkyCoord(galaxy.ra, galaxy.dec, unit = "deg")
     else:
-        coord_pnt = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, units = "deg")
+        coord_pnt = SkyCoord(galaxy.ra_pnt, galaxy.dec_pnt, unit = "deg")
     x_pnt, y_pnt = WCS(img_h).celestial.world_to_pixel(coord_pnt)
     xlim = [int(x_pnt - 0.75 / 60 / cd), int(x_pnt + 0.75 / 60 / cd)]
     ylim = [int(y_pnt - 0.75 / 60 / cd), int(y_pnt + 0.75 / 60 / cd)]
