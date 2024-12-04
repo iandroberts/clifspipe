@@ -16,7 +16,7 @@ def dered_ha_flux(galaxy):
     ha_snr = ha_flux * np.sqrt(galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR"))
     hb_flux = galaxy.get_eline_map("Hb-4862")
     hb_snr = ha_flux * np.sqrt(galaxy.get_eline_map("Hb-4862", map = "GFLUX_IVAR"))
-    mask_good = np.greater_equal(ha_snr, 5) & np.greater_equal(hb_snr, 5)
+    mask_good = np.greater_equal(ha_snr, 3) & np.greater_equal(hb_snr, 3)
     hb_flux[~mask_good] = np.nan
     ha_flux[~mask_good] = np.nan
     decr = ha_flux / hb_flux

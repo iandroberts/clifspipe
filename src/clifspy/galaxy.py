@@ -36,7 +36,6 @@ class Galaxy:
         self.sfr_gswlc = 10 ** clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["sfr_gswlc2"][0]
         if self.manga:
             self.plateifu = clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["plateifu"][0]
-            print(self.plateifu)
             self.manga_Nfib = int(manga_cat[manga_cat["plateifu"] == self.plateifu]["ifudesignsize"])
     def get_cutout_image(self, telescope, filter, header = False):
         img_path = "/arc/projects/CLIFS/multiwav/cutouts/clifs{}/{}-{}.fits".format(self.clifs_id, telescope, filter)
@@ -85,8 +84,7 @@ class Galaxy:
         sigsfr, sigsfr_h = self.get_sfr_map(return_header=True)
         kpc2_per_pixel = (self.cosmo.kpc_proper_per_arcmin(self.z).value * sigsfr_h["PC2_2"] * 60) ** 2
         sfr = sigsfr * kpc2_per_pixel
-        aper_sky = aperture.SkyEllipticalAperture(self.c, 2*self.reff, 2*self.reff*(1-self.ell), theta=self.pa)
+        aper_sky = aperture.SkyEllipticalAperture(self.c, 1.5*self.reff, 1.5*self.reff*(1-self.ell), theta=self.pa)
         aper_px = aper_sky.to_pixel(WCS(sigsfr_h))
         aper_mask = aper_px.to_mask()
-        print(self.sfr_gswlc)
         return np.nansum(aper_mask.multiply(sfr))
