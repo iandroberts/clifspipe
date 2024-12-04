@@ -101,7 +101,6 @@ def _populate_files(args, file, tclifs):
             print('cube_sci = "{}"'.format(file_list[0]), file=file)
     else:
         raise Exception("Strange number of matches from file search")
-    print('outdir_products = "/arc/projects/CLIFS/derived_products/clifs/clifs{}"'.format(args.clifs_id), file=file)
     print("", file=file)
 
 def _populate_pipeline(args, file):

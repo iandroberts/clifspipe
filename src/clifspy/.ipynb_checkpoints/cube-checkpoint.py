@@ -20,7 +20,6 @@ import sys
 import logging
 import subprocess
 import argparse
-import time
 
 logger = logging.getLogger("CLIFS_Pipeline")
 
@@ -124,15 +123,6 @@ def galaxy_mask(galaxy, wcs, shape):
     mask = aper_px.to_mask().to_image(shape)
     return mask
 
-def smooth_cube_spectral(data, sig):
-    data_smooth = np.zeros(data.shape)
-    gauss_kernel = convolution.Gaussian1DKernel(sig)
-    for i in range(data.shape[1]):
-        for j in range(data.shape[2]):
-            spec = data_smooth[:, i, j]
-            data_smooth[:, i, j] = convolution.convolve_fft(spec, gauss_kernel)
-    return data_smooth
-
 def bkg_sub(galaxy, data, wave, wcs):
     if galaxy.config["pipeline"]["bkgsub_galmask"]:
         mask = galaxy_mask(galaxy, wcs, data.shape[1:])
@@ -149,7 +139,7 @@ def bkg_sub(galaxy, data, wave, wcs):
             bkg_cube[ch, :, :] = bkg.background
         else:
             bkg_cube[ch, :, :] = bkg_cube[ch - 1, :, :]
-    #bkg_cube = smooth_cube_spectral(bkg_cube, 5)
+    # should we smooth bkg_cube over the spectral axis?
     data = data - bkg_cube
     return data
 

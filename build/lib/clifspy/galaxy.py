@@ -8,8 +8,6 @@ import numpy as np
 import toml
 from clifspy.utils import eline_lookup
 from astropy.table import Table
-from astropy import cosmology
-from photutils import aperture
 
 class Galaxy:
     def __init__(self, clifs_id):
@@ -32,8 +30,6 @@ class Galaxy:
         self.ra_pnt = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["ra_lifu"])
         self.dec_pnt = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["dec_lifu"])
         self.tail = float(clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["tail_pa"]) >= 0.0
-        self.cosmo = cosmology.FlatLambdaCDM(H0=70, Om0=0.3)
-        self.sfr_gswlc = 10 ** clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["sfr_gswlc2"][0]
         if self.manga:
             self.plateifu = clifs_cat[clifs_cat["clifs_id"] == self.clifs_id]["plateifu"][0]
             print(self.plateifu)
@@ -46,16 +42,33 @@ class Galaxy:
         dap_dir = self.config["files"]["outdir_dap"]
         find_maps = glob.glob(dap_dir + "/*-MAPS-HYB10-MILESHC-MASTARSSP.fits*")
         if len(find_maps) == 0:
-            return None
-        if len(find_maps) == 1:
+            print("No MAPS file found")
+            sys.exit()
+        elif len(find_maps) == 1:
             mapsfile = fits.open(find_maps[0])
         elif len(find_maps) == 2:
-            print("Found two MAPS files, assuming WEAVE and MaNGA, proceeding with WEAVE")
-            mapsfile = fits.open([s for s in find_maps if "weave" in s][0])
+            print("Found two MAPS files (assuming one MaNGA, one WEAVE), proceeding with WEAVE")
+            mapsfile = fits.open(dap_dir + "/weave-calibrated-MAPS-HYB10-MILESHC-MASTARSSP.fits")
         else:
-            print("Found more than one MaNGA maps file")
+            print("Found more than one MAPS file")
             sys.exit()
         return mapsfile
+
+    def get_modelcube(self):
+        dap_dir = self.config["files"]["outdir_dap"]
+        find_cube = glob.glob(dap_dir + "/*-LOGCUBE-HYB10-MILESHC-MASTARSSP.fits*")
+        if len(find_cube) == 0:
+            print("No LOGCUBE file found")
+            sys.exit()
+        elif len(find_cube) == 1:
+            cubefile = fits.open(find_cube[0])
+        elif len(find_cube) == 2:
+            print("Found two LOGCUBE files (assuming one MaNGA, one WEAVE), proceeding with WEAVE")
+            cubefile = fits.open(dap_dir + "/weave-calibrated-LOGCUBE-HYB10-MILESHC-MASTARSSP.fits")
+        else:
+            print("Found more than one LOGCUBE file")
+            sys.exit()
+        return cubefile
 
     def get_eline_map(self, line, map = "GFLUX", return_map = True, return_wcs = False, ifu = "weave"):
         mapsfile = self.get_maps()
@@ -78,15 +91,16 @@ class Galaxy:
         data_cube.close()
         return wave.value, flux[:, y, x], ivar[:, y, x]
 
-    def get_sfr_map(self, return_header=False):
-        return fits.getdata(self.config["files"]["outdir_products"] + "/sigma_sfr_ha.fits", header=return_header)
+class get_cube:
+    def __init__(self, galaxy):
+        cube = fits.open(galaxy.config["files"]["cube_sci"])
+        self.flux = cube["FLUX"].data
+        self.ivar = cube["IVAR"].data
+        #self.wave = cube["WAVE"].data
+        self.sres = 2500
+        #self.mask = np.equal(cube["MASK"].data, 0)
+        self.wcs = WCS(cube["FLUX"].header)
 
-    def get_ifu_total_sfr(self):
-        sigsfr, sigsfr_h = self.get_sfr_map(return_header=True)
-        kpc2_per_pixel = (self.cosmo.kpc_proper_per_arcmin(self.z).value * sigsfr_h["PC2_2"] * 60) ** 2
-        sfr = sigsfr * kpc2_per_pixel
-        aper_sky = aperture.SkyEllipticalAperture(self.c, 2*self.reff, 2*self.reff*(1-self.ell), theta=self.pa)
-        aper_px = aper_sky.to_pixel(WCS(sigsfr_h))
-        aper_mask = aper_px.to_mask()
-        print(self.sfr_gswlc)
-        return np.nansum(aper_mask.multiply(sfr))
+    def get_center(self):
+        x0, y0 = np.round(self.wcs.celestial.world_to_pixel(self.c)).astype(int)
+        return x0, y0

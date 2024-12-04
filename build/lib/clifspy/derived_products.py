@@ -3,20 +3,13 @@ import bagpipes as pipes
 from astropy.io import fits
 from clifspy.utils import eline_lookup, eline_mask
 import numpy as np
-from astropy.cosmology import FlatLambdaCDM
-import astropy.units as u
-from pathlib import Path
-
-def colour_excess(wav):
-    return (-4.61777 + 1.41612 * np.power(wav.to(u.micron).value, -1) + 1.52077 * np.power(wav.to(u.micron).value, -2) -
-    0.63269 * np.power(wav.to(u.micron).value, -3) + 0.07386 * np.power(wav.to(u.micron).value, -4))
 
 def dered_ha_flux(galaxy):
     ha_flux = galaxy.get_eline_map("Ha-6564")
     ha_snr = ha_flux * np.sqrt(galaxy.get_eline_map("Ha-6564", map = "GFLUX_IVAR"))
     hb_flux = galaxy.get_eline_map("Hb-4862")
     hb_snr = ha_flux * np.sqrt(galaxy.get_eline_map("Hb-4862", map = "GFLUX_IVAR"))
-    mask_good = np.greater_equal(ha_snr, 5) & np.greater_equal(hb_snr, 5)
+    mask_good = np.greater_equal(ha_snr, 3) & np.greater_equal(hb_snr, 3)
     hb_flux[~mask_good] = np.nan
     ha_flux[~mask_good] = np.nan
     decr = ha_flux / hb_flux
@@ -24,14 +17,12 @@ def dered_ha_flux(galaxy):
 
 def make_sfr_map(galaxy, cdelt = 1 / 3600, C = 41.27, H0 = 70, Om0 = 0.3):
     # Defaults to calibration from Kennicutt & Evans, but can set your preferred C if needed (log SFR = log L - log C)
-    # TO-DO: add BPT selection for SFing spaxels
     cosmo = FlatLambdaCDM(H0 = H0, Om0 = Om0)
     Dl = cosmo.luminosity_distance(galaxy.z)
     scale = cosmo.kpc_proper_per_arcmin(galaxy.z).value * 60
     flux = dered_ha_flux(galaxy)
     lum = (4 * np.pi * Dl ** 2 * flux).cgs.value
     sfr = lum / 10 ** C
-    sfr[~np.isfinite(sfr)] = np.nan
     Apx_kpc = (cdelt * scale) ** 2
     return sfr / Apx_kpc
 
@@ -40,8 +31,7 @@ def write_sfr_map(galaxy, sig_sfr):
     hdr = wcs.to_header()
     hdr["BUNIT"] = ("Msun/yr/kpc2", "Unit of the map")
     hdu = fits.PrimaryHDU(data = sig_sfr, header = hdr)
-    Path(galaxy.config["files"]["outdir_products"]).mkdir(parents=True, exist_ok=True)
-    hdu.writeto(galaxy.config["files"]["outdir_products"] + "/sigma_sfr_ha.fits", overwrite=True)
+    hdu.writeto(galaxy.config["files"]["outdir_products"] + "/sigma_sfr_ha.fits")
 
 def load_spectrum_for_bagpipes(ID):
     cid, x, y = ID.split("_")
@@ -100,7 +90,6 @@ def run_bagpipes(galaxy, x, y):
     fit.plot_corner()
 
 def products_for_clifspipe(galaxy):
-    sig_sfr = make_sfr_map(galaxy)
-    write_sfr_map(galaxy, sig_sfr)
-    print(galaxy.get_ifu_total_sfr())
-    #run_bagpipes(galaxy, 66, 40)
+    #sig_sfr = make_sfr_map(galaxy)
+    #write_sfr_map(galaxy, sig_sfr)
+    run_bagpipes(galaxy, 66, 40)
