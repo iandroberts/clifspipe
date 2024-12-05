@@ -52,9 +52,23 @@ class Galaxy:
             print("Found two MAPS files, assuming WEAVE and MaNGA, proceeding with WEAVE")
             mapsfile = fits.open([s for s in find_maps if "weave" in s][0])
         else:
-            print("Found more than one MaNGA maps file")
+            print("Found more than two MAPS files")
             sys.exit()
         return mapsfile
+
+    def get_modelcube(self):
+        find_cube = glob.glob(self.config["files"]["outdir_dap"] + "/*-LOGCUBE-HYB10-MILESHC-MASTARSSP.fits*")
+        if len(find_cube) == 0:
+            return None
+        if len(find_cube) == 1:
+            cubefile = fits.open(find_cube[0])
+        elif len(find_cube) == 2:
+            print("Found two LOGCUBE files, assuming WEAVE and MaNGA, proceeding with WEAVE")
+            cubefile = fits.open([s for s in find_cube if "weave" in s][0])
+        else:
+            print("Found more than two MAPS files")
+            sys.exit()
+        return cubefile
 
     def get_eline_map(self, line, map = "GFLUX", return_map = True, return_wcs = False, ifu = "weave"):
         mapsfile = self.get_maps()

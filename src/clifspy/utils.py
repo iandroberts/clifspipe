@@ -16,9 +16,9 @@ def wave_axis_from_wcs(wcs, nwave):
     wave = wcs.all_pix2world(coo, 1)[:, 2] * wcs.wcs.cunit[2].to('angstrom')
     return wave
 
-def match_to_galaxy(tcat, tgal, max_sep_arcsec=1.0):
+def match_to_galaxy(tcat, ra, dec, max_sep_arcsec=1.0):
     c_cat = coordinates.SkyCoord(tcat["RA"], tcat["DEC"], unit="deg")
-    c_gal = coordinates.SkyCoord(tgal["ra"], tgal["decl"], unit="deg")
+    c_gal = coordinates.SkyCoord(ra, dec, unit="deg")
     max_sep = max_sep_arcsec * units.arcsec
     idx, d2d, d3d = c_gal.match_to_catalog_3d(c_cat)
     if d2d[0] < max_sep:
@@ -31,128 +31,191 @@ def match_to_galaxy(tcat, tgal, max_sep_arcsec=1.0):
         logger.info("No galaxy match in NSA (max_sep = {} arcsec)".format(max_sep_arcsec))
         return -99, -99, -99, -99
 
-def _populate_galaxy(args, file, tclifs):
-    print('[galaxy]', file=file)
-    print('name = "{}"'.format(tclifs["name"][0]), file=file)
-    print('clifs_id = {}'.format(args.clifs_id), file=file)
-    print('ra = {:.6e}'.format(tclifs["ra"][0]), file=file)
-    print('dec = {:.5e}'.format(tclifs["decl"][0]), file=file)
-    print('z = {:.5f}'.format(tclifs["redshift"][0]), file=file)
-    tnsa = Table.read("/arc/projects/CLIFS/catalogs/nsa_v1_0_1_shrunk.fits")
-    pa, ellip, r50, r90 = match_to_galaxy(tnsa, tclifs)
-    print('ell = {:.3f}'.format(ellip), file=file)
-    print('reff = {:.3e}'.format(r50), file=file)
-    print('pa = {:.3e}'.format(pa), file=file)
-    print('r90 = {:.3e}'.format(r90), file=file)
-    print("", file=file)
+class clifs_config_file:
+    def __init__(self, args):
+        self.args = args
+        self._clifstab = Table.read("/arc/projects/CLIFS/catalogs/clifs_master_catalog.fits")
+        self.tclifs = self._clifstab[self._clifstab["clifs_id"] == self.args.clifs_id]
 
-def _populate_data_coverage(args, file, tclifs):
-    print('[data_coverage]', file=file)
-    if "MaNGA" in tclifs["IFU_flag"][0]:
-        print('manga = true', file=file)
-    else:
-        print('manga = false', file=file)
-    if "WEAVE" in tclifs["IFU_flag"][0]:
-        print('weave = true', file=file)
-    else:
-        print('weave = false', file=file)
-    if "ACA" in tclifs["CO_flag"][0]:
-        print('aca = true', file=file)
-    else:
-        print('aca = false', file=file)
-    if "IRAM" in tclifs["CO_flag"][0]:
-        print('iram = true', file=file)
-    else:
-        print('iram = false', file=file)
-    print("", file=file)
+    def _populate_galaxy(self, file):
+        print('[galaxy]', file=file)
+        print('name = "{}"'.format(self.tclifs["name"][0]), file=file)
+        print('clifs_id = {}'.format(self.args.clifs_id), file=file)
+        print('ra = {:.6e}'.format(self.tclifs["ra"][0]), file=file)
+        print('dec = {:.5e}'.format(self.tclifs["decl"][0]), file=file)
+        print('z = {:.5f}'.format(self.tclifs["redshift"][0]), file=file)
+        tnsa = Table.read("/arc/projects/CLIFS/catalogs/nsa_v1_0_1_shrunk.fits")
+        pa, ellip, r50, r90 = match_to_galaxy(tnsa, self.tclifs["ra"], self.tclifs["dec"])
+        print('ell = {:.3f}'.format(ellip), file=file)
+        print('reff = {:.3e}'.format(r50), file=file)
+        print('pa = {:.3e}'.format(pa), file=file)
+        print('r90 = {:.3e}'.format(r90), file=file)
+        print("", file=file)
 
-def _populate_cube(args, file):
-    print('[cube]', file=file)
-    print('xmin = {}'.format(args.xmin), file=file)
-    print('xmax = {}'.format(args.xmax), file=file)
-    print('ymin = {}'.format(args.ymin), file=file)
-    print('ymax = {}'.format(args.ymax), file=file)
-    print("", file=file)
-
-def _populate_files(args, file, tclifs):
-    print('[files]', file=file)
-    paths = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/stackcube_???????.fit".format(args.clifs_id))
-    if len(paths) == 2:
-        numbers = [re.findall(r"\d+", paths[0]), re.findall(r"\d+", paths[1])]
-        if int(numbers[0][1]) > int(numbers[1][1]):
-            print('cube_blue = "{}"'.format(paths[0]), file=file)
-            print('cube_red = "{}"'.format(paths[1]), file=file)
+    def _populate_data_coverage(self, file):
+        print('[data_coverage]', file=file)
+        if "MaNGA" in self.tclifs["IFU_flag"][0]:
+            print('manga = true', file=file)
         else:
-            print('cube_blue = "{}"'.format(paths[1]), file=file)
-            print('cube_red = "{}"'.format(paths[0]), file=file)
-        if tclifs["weave_obs"][0] == 1:
-            print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(args.clifs_id), file=file)
-        elif tclifs["manga_obs"][0] == 1:
-            file_list = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/manga/*LOGCUBE.fits.gz".format(args.clifs_id))
-            print('cube_sci = "{}"'.format(file_list[0]), file=file)
-        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file=file)
-        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file=file)
-    elif len(paths) == 0:
-        logger.info("No 'stackcube' files found")
-        print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(args.clifs_id), file=file)
-        print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(args.clifs_id), file=file)
-        if tclifs["manga_obs"][0] == 1:
-            file_list = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/manga/*LOGCUBE.fits.gz".format(args.clifs_id))
-            print('cube_sci = "{}"'.format(file_list[0]), file=file)
-    else:
-        raise Exception("Strange number of matches from file search")
-    print('outdir_products = "/arc/projects/CLIFS/derived_products/clifs/clifs{}"'.format(args.clifs_id), file=file)
-    print("", file=file)
+            print('manga = false', file=file)
+        if "WEAVE" in self.tclifs["IFU_flag"][0]:
+            print('weave = true', file=file)
+        else:
+            print('weave = false', file=file)
+        if "ACA" in self.tclifs["CO_flag"][0]:
+            print('aca = true', file=file)
+        else:
+            print('aca = false', file=file)
+        if "IRAM" in self.tclifs["CO_flag"][0]:
+            print('iram = true', file=file)
+        else:
+            print('iram = false', file=file)
+        print("", file=file)
 
-def _populate_pipeline(args, file):
-    print('[pipeline]', file=file)
-    print('bkgsub = {}'.format(args.bkgsub), file=file)
-    print('bkgsub_galmask = {}'.format(args.bkgsub_galmask), file=file)
-    print('downsample_spatial = {}'.format(args.downsample_spatial), file=file)
-    print('alpha = {}'.format(args.alpha), file=file)
-    print('factor_spatial = {}'.format(args.factor_spatial), file=file)
-    print('downsample_wav = {}'.format(args.downsample_wav), file=file)
-    print('fill_ccd_gaps = {}'.format(args.fill_ccd_gaps), file=file)
-    print('fix_astrometry = {}'.format(args.fix_astrometry), file=file)
-    print('hdf5 = {}'.format(args.hdf5), file=file)
-    print('verbose = {}'.format(args.verbose), file=file)
-    print('clobber = {}'.format(args.clobber), file=file)
-    print("", file=file)
+    def _populate_cube(self, file):
+        print('[cube]', file=file)
+        print('xmin = {}'.format(self.args.xmin), file=file)
+        print('xmax = {}'.format(self.args.xmax), file=file)
+        print('ymin = {}'.format(self.args.ymin), file=file)
+        print('ymax = {}'.format(self.args.ymax), file=file)
+        print("", file=file)
 
-def _populate_plotting(file):
-    print('[plotting]', file=file)
-    print('panel.Nr90 = 1.0', file=file)
-    print('panel.sn_min = [1, 2]', file=file)
-    print('panel.sn_max = [32, 30]', file=file)
-    print('panel.v_star_min = [-100, -75]', file=file)
-    print('panel.v_star_max = [100, 75]', file=file)
-    print('panel.vdisp_star_min = [0, 10]', file=file)
-    print('panel.vdisp_star_max = [100, 90]', file=file)
-    print('panel.dn4000_min = [1.0, 1.1]', file=file)
-    print('panel.dn4000_max = [2.0, 1.9]', file=file)
-    print('panel.flux_ha_min = [0, 5]', file=file)
-    print('panel.flux_ha_max = [50, 45]', file=file)
-    print('panel.v_ha_min = [-100, -75]', file=file)
-    print('panel.v_ha_max = [100, 75]', file=file)
-    print("", file=file)
-    print('fov.b_pct = 99.9', file=file)
-    print('fov.g_pct = 99.8', file=file)
-    print('fov.r_pct = 99.7', file=file)
-    print('fov.asinh_a = 0.05', file=file)
-    print("", file=file)
-    print('specfit.eline_labels = true', file=file)
-    print('specfit.inset_ylim = [1.3, 4.0]', file=file)
+    def _populate_files(self, file):
+        print('[files]', file=file)
+        paths = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/stackcube_???????.fit".format(self.args.clifs_id))
+        if len(paths) == 2:
+            numbers = [re.findall(r"\d+", paths[0]), re.findall(r"\d+", paths[1])]
+            if int(numbers[0][1]) > int(numbers[1][1]):
+                print('cube_blue = "{}"'.format(paths[0]), file=file)
+                print('cube_red = "{}"'.format(paths[1]), file=file)
+            else:
+                print('cube_blue = "{}"'.format(paths[1]), file=file)
+                print('cube_red = "{}"'.format(paths[0]), file=file)
+            if self.tclifs["weave_obs"][0] == 1:
+                print('cube_sci = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave/calibrated_cube.fits"'.format(self.args.clifs_id), file=file)
+            elif self.tclifs["manga_obs"][0] == 1:
+                file_list = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/manga/*LOGCUBE.fits.gz".format(self.args.clifs_id))
+                print('cube_sci = "{}"'.format(file_list[0]), file=file)
+            print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(self.args.clifs_id), file=file)
+            print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(self.args.clifs_id), file=file)
+        elif len(paths) == 0:
+            logger.info("No 'stackcube' files found")
+            print('outdir = "/arc/projects/CLIFS/cubes/clifs/clifs{}/weave"'.format(self.args.clifs_id), file=file)
+            print('outdir_dap = "/arc/projects/CLIFS/dap_output/clifs/clifs{}"'.format(self.args.clifs_id), file=file)
+            if self.tclifs["manga_obs"][0] == 1:
+                file_list = glob.glob("/arc/projects/CLIFS/cubes/clifs/clifs{}/manga/*LOGCUBE.fits.gz".format(self.args.clifs_id))
+                print('cube_sci = "{}"'.format(file_list[0]), file=file)
+        else:
+            raise Exception("Strange number of matches from file search")
+        print('outdir_products = "/arc/projects/CLIFS/derived_products/clifs/clifs{}"'.format(self.args.clifs_id), file=file)
+        print("", file=file)
 
-def make_config_file(args):
-    clifstab = Table.read("/arc/projects/CLIFS/catalogs/clifs_master_catalog.fits")
-    tclifs = clifstab[clifstab["clifs_id"] == args.clifs_id]
-    file = open(f"/arc/projects/CLIFS/config_files/clifs_{args.clifs_id}.toml", "w")
-    _populate_galaxy(args, file, tclifs)
-    _populate_data_coverage(args, file, tclifs)
-    _populate_cube(args, file)
-    _populate_files(args, file, tclifs)
-    _populate_pipeline(args, file)
-    _populate_plotting(file)
+    def _populate_pipeline(self, file):
+        print('[pipeline]', file=file)
+        print('bkgsub = {}'.format(self.args.bkgsub), file=file)
+        print('bkgsub_galmask = {}'.format(self.args.bkgsub_galmask), file=file)
+        print('downsample_spatial = {}'.format(self.args.downsample_spatial), file=file)
+        print('alpha = {}'.format(self.args.alpha), file=file)
+        print('factor_spatial = {}'.format(self.args.factor_spatial), file=file)
+        print('downsample_wav = {}'.format(self.args.downsample_wav), file=file)
+        print('fill_ccd_gaps = {}'.format(self.args.fill_ccd_gaps), file=file)
+        print('fix_astrometry = {}'.format(self.args.fix_astrometry), file=file)
+        print('hdf5 = {}'.format(self.args.hdf5), file=file)
+        print('verbose = {}'.format(self.args.verbose), file=file)
+        print('clobber = {}'.format(self.args.clobber), file=file)
+        print("", file=file)
+
+    def _populate_plotting(self, file):
+        print('[plotting]', file=file)
+        print('panel.Nr90 = 1.0', file=file)
+        print('panel.sn_min = [1, 2]', file=file)
+        print('panel.sn_max = [32, 30]', file=file)
+        print('panel.v_star_min = [-100, -75]', file=file)
+        print('panel.v_star_max = [100, 75]', file=file)
+        print('panel.vdisp_star_min = [0, 10]', file=file)
+        print('panel.vdisp_star_max = [100, 90]', file=file)
+        print('panel.dn4000_min = [1.0, 1.1]', file=file)
+        print('panel.dn4000_max = [2.0, 1.9]', file=file)
+        print('panel.flux_ha_min = [0, 5]', file=file)
+        print('panel.flux_ha_max = [50, 45]', file=file)
+        print('panel.v_ha_min = [-100, -75]', file=file)
+        print('panel.v_ha_max = [100, 75]', file=file)
+        print("", file=file)
+        print('fov.b_pct = 99.9', file=file)
+        print('fov.g_pct = 99.8', file=file)
+        print('fov.r_pct = 99.7', file=file)
+        print('fov.asinh_a = 0.05', file=file)
+        print("", file=file)
+        print('specfit.eline_labels = true', file=file)
+        print('specfit.inset_ylim = [1.3, 4.0]', file=file)
+
+    def make(self):
+        outfile = open(f"/arc/projects/CLIFS/config_files/clifs_{self.args.clifs_id}.toml", "w")
+        self._populate_galaxy(outfile)
+        self._populate_data_coverage(outfile)
+        self._populate_cube(outfile)
+        self._populate_files(outfile)
+        self._populate_pipeline(outfile)
+        self._populate_plotting(outfile)
+
+class field_config_file:
+    def __init__(self, plateifu):
+        self.plateifu = plateifu
+        self._tmanga_full = Table.read("/arc/projects/CLIFS/catalogs/drpall-v3_1_1.fits", hdu=1)
+        self.tmanga = self._tmanga_full[self._tmanga_full["plateifu"] == self.plateifu]
+
+    def _populate_galaxy(self, file):
+        print('[galaxy]', file=file)
+        print('plateifu = "{}"'.format(self.plateifu), file=file)
+        print('ra = {:.6e}'.format(self.tmanga["objra"][0]), file=file)
+        print('dec = {:.5e}'.format(self.tmanga["objdec"][0]), file=file)
+        print('ifura = {:.6e}'.format(self.tmanga["ifura"][0]), file=file)
+        print('ifudec = {:.5e}'.format(self.tmanga["ifudec"][0]), file=file)
+        print('z = {:.5f}'.format(self.tmanga["z"][0]), file=file)
+        tnsa = Table.read("/arc/projects/CLIFS/catalogs/nsa_v1_0_1_shrunk.fits")
+        pa, ellip, r50, r90 = match_to_galaxy(tnsa, self.tmanga["objra"], self.tmanga["objdec"])
+        print('ell = {:.3f}'.format(ellip), file=file)
+        print('reff = {:.3e}'.format(r50), file=file)
+        print('pa = {:.3e}'.format(pa), file=file)
+        print('r90 = {:.3e}'.format(r90), file=file)
+        print("", file=file)
+
+    def _populate_files(self, file):
+        print('[files]', file=file)
+        print('cube_sci = "/arc/projects/CLIFS/cubes/control/{}/manga-{}-LOGCUBE.fits.gz"'.format(self.plateifu, self.plateifu), file=file)
+        print('outdir_dap = "/arc/projects/CLIFS/dap_output/control/{}"'.format(self.plateifu), file=file)
+        print('outdir_products = "/arc/projects/CLIFS/derived_products/control/{}"'.format(self.plateifu), file=file)
+        print("", file=file)
+
+    def _populate_plotting(self, file):
+        print('[plotting]', file=file)
+        print('panel.Nr90 = 1.0', file=file)
+        print('panel.sn_min = [1, 2]', file=file)
+        print('panel.sn_max = [32, 30]', file=file)
+        print('panel.v_star_min = [-100, -75]', file=file)
+        print('panel.v_star_max = [100, 75]', file=file)
+        print('panel.vdisp_star_min = [0, 10]', file=file)
+        print('panel.vdisp_star_max = [100, 90]', file=file)
+        print('panel.dn4000_min = [1.0, 1.1]', file=file)
+        print('panel.dn4000_max = [2.0, 1.9]', file=file)
+        print('panel.flux_ha_min = [0, 5]', file=file)
+        print('panel.flux_ha_max = [50, 45]', file=file)
+        print('panel.v_ha_min = [-100, -75]', file=file)
+        print('panel.v_ha_max = [100, 75]', file=file)
+        print("", file=file)
+        print('fov.b_pct = 99.9', file=file)
+        print('fov.g_pct = 99.8', file=file)
+        print('fov.r_pct = 99.7', file=file)
+        print('fov.asinh_a = 0.05', file=file)
+        print("", file=file)
+        print('specfit.eline_labels = true', file=file)
+        print('specfit.inset_ylim = [1.3, 4.0]', file=file)
+
+    def make(self):
+        outfile = open(f"/arc/projects/CLIFS/config_files/control/control_{self.plateifu}.toml", "w")
+        self._populate_galaxy(outfile)
+        self._populate_files(outfile)
+        self._populate_plotting(outfile)
 
 def sky_cutout_from_image(img, coord, size, wcs):
     cut = nddata.Cutout2D(img, coord, size, wcs = wcs)

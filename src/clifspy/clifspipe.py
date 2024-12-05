@@ -1,10 +1,11 @@
-from clifspy import (derived_products, cube, galaxy, dap, utils,
-                        multiwav, plotting)
 import warnings
 import os.path
 import logging
 import time
 import argparse
+
+from clifspy import (derived_products, cube, galaxy, dap, utils,
+                        multiwav, plotting)
 
 def setup_logger(gal_id):
     timestr = time.strftime("%Y%m%d-%H%M%S")
@@ -35,7 +36,7 @@ def setup_logger(gal_id):
 def run_clifs_pipeline(args, logger):
     if not os.path.isfile("/arc/projects/CLIFS/config_files/clifs_{}.toml".format(args.clifs_id)):
         logger.info("Galaxy config file does not exist, generating it now")
-        utils.make_config_file(args)
+        utils.clifs_config_file(args).make()
     this_galaxy = galaxy.Galaxy(args.clifs_id)
 
     if args.process_cube:
